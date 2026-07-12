@@ -1,25 +1,28 @@
 ---
-name: Bug report
-about: Create a report to help us improve
+name: 错误报告
+about: 提交可复现的问题，帮助改进项目
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is or what you expected to happen instead.
+**问题描述**
 
-**To Reproduce**
-Steps to reproduce the behavior (if possible)
+请简明说明发生了什么，以及你原本期望的行为。
 
-**Version**
-Which commit did you build or download? (mono TS3AudiBot.exe -V or !version in chat)
+**复现步骤**
 
-**Platform**
-Which platform(-version) are you running on? (ubuntu 16.04, arch, windows,...)
-Which runtime(-version) are you using? (mono: mono -V, dotnet: dotnet --info)
+请列出能够稳定复现问题的操作步骤。
 
-**Log**
-```
-Paste the important log parts from the ts3audiobot.log into this code block here.
-Try not to paste too little.
-At best from the first to last interaction from you which reproduces this problem.
+**版本信息**
+
+使用的是哪个 Release 或提交？可在机器人目录执行 `./start.sh --version`，或在聊天中发送 `!version`。
+
+**运行环境**
+
+操作系统及版本、CPU 架构、.NET runtime 版本，以及是否已安装 `ffmpeg` 和 `libopus-dev`。
+
+**日志**
+
+```text
+请粘贴 ts3audiobot.log 中与问题有关的完整日志。
+建议从触发问题前开始，到问题发生后结束，不要只截取最后一行错误。
 ```

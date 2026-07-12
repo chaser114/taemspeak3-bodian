@@ -1,28 +1,26 @@
 ---
-name: Setup help
-about: Problems setting up or running the bot
+name: 搭建与运行求助
+about: 反馈部署、启动或配置机器人时的问题
 
 ---
 
-**Describe the problem**
-A clear and concise description of what the problem is.
+**问题描述**
 
-**To Reproduce**
-Steps to reproduce the behavior
+请简明说明在哪个步骤遇到了什么问题。
 
-**System Information**
-- **Platform**: (Ubuntu 16.04, Debian 8, Arch, etc)  
-  
-- **Mono version**: (`mono -V`)  
-  
-- **Which commit did you download**: (or on prebuilt: `mono TS3AudioBot.exe -V`)  
-  
-(If all fields in the TS3AudioBot log header are correctly filled you can
-alternatively just post the header here.)
+**复现步骤**
 
-**Additional Logs, Exceptions, etc**
-When applicable try to add relevant log excerpts here.
+请列出从解压、安装依赖到启动机器人时执行过的命令。
 
-```
-Put logs or code in triple backticks like here to properly format it.
+**系统信息**
+
+- **操作系统及版本**：例如 Ubuntu 22.04、Windows 10
+- **CPU 架构**：例如 x64
+- **机器人版本或 Release 名称**：
+- **依赖安装情况**：Linux 请说明是否已安装 `ffmpeg` 和 `libopus-dev`
+
+**日志或报错**
+
+```text
+请粘贴完整的报错和相关日志。
 ```

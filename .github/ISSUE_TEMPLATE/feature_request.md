@@ -1,14 +1,17 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
+name: 功能建议
+about: 提交你希望加入的功能
 
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+**要解决的问题**
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+请说明当前遇到的具体使用问题或不便。
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+**期望的方案**
+
+请描述你希望机器人如何工作，尽量给出使用示例。
+
+**替代方案**
+
+如果你考虑过其他实现方式，请一并说明。
