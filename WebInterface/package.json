@@ -1,0 +1,58 @@
+{
+  "name": "ts3abweb",
+  "version": "2.0.0-alpha",
+  "description": "Provides a ui to control the TS3AudioBot",
+  "scripts": {
+    "build": "webpack --config webpack.production.config.js",
+    "start": "webpack-dev-server --config webpack.development.config.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Splamy/TS3AudioBot"
+  },
+  "keywords": [
+    "ts3",
+    "ts3ab",
+    "interface",
+    "ui",
+    "audio",
+    "bot"
+  ],
+  "author": "Splamy",
+  "license": "OSL-3.0",
+  "dependencies": {
+    "@mdi/font": "^5.5.55",
+    "buefy": "^0.8.20",
+    "lodash-es": "^4.17.15",
+    "swagger-ui-dist": "^3.32.1",
+    "vue": "^2.6.11",
+    "vue-router": "^3.4.3"
+  },
+  "devDependencies": {
+    "@types/lodash-es": "^4.17.3",
+    "copy-webpack-plugin": "^6.0.3",
+    "css-loader": "^3.5.3",
+    "file-loader": "^6.0.0",
+    "html-webpack-plugin": "^4.3.0",
+    "less": "^3.12.2",
+    "less-loader": "^6.2.0",
+    "material-design-icons-iconfont": "^5.0.1",
+    "mini-css-extract-plugin": "^0.9.0",
+    "style-loader": "^1.2.1",
+    "svg-inline-loader": "^0.8.2",
+    "ts-loader": "^8.0.2",
+    "typescript": "^3.9.7",
+    "uglify-es": "^3.3.9",
+    "vue-loader": "^15.9.3",
+    "vue-style-loader": "^4.1.2",
+    "vue-template-compiler": "^2.6.11",
+    "webpack": "^4.44.1",
+    "webpack-bundle-analyzer": "^3.8.0",
+    "webpack-cli": "^3.3.12",
+    "webpack-dev-server": "^3.11.0",
+    "webpack-merge": "^5.1.1"
+  },
+  "note": {
+    "_1": "css-loaded 4.X.X is available but breaks everything and I don't know why"
+  }
+}

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>8.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>KuwoMusicPlugin</AssemblyName>
+    <RootNamespace>KuwoMusicPlugin</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TS3AudioBot\TS3AudioBot.csproj" Private="false" />
+  </ItemGroup>
+</Project>
