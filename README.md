@@ -9,6 +9,9 @@
 - `!play 序号`：播放最近一次搜索结果中的对应歌曲
 - 播放时将机器人 TeamSpeak 简介更新为歌曲名；空闲时显示“休眠中”
 - 插件独立于主程序，文件位于 `plugins/KuwoMusicPlugin.dll`
+- `!add 歌曲名`:搜索并加入下一首
+- `!add 序号`:将搜索结果加入下一首
+- `!next`:立即切换到队列下一首
 
 
 ## 下载
@@ -68,4 +71,4 @@ dotnet build -c Release KuwoMusicPlugin/KuwoMusicPlugin.csproj
 ## 声明
 
 - 本插件由chatgpt开发，插件只是用来自用更新可能较慢，如需增添功能可以发issues，或者自己fork仓库，让AI给你改
-- 使用的api[星之阁API](https://api.xingzhige.com/)
+- 使用[星之阁API](https://api.xingzhige.com/)
