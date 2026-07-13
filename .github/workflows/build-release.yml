@@ -68,7 +68,7 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           name: Automated build ${{ github.run_number }}
-          prerelease: true
+          prerelease: false
           generate_release_notes: true
           files: |
             artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
