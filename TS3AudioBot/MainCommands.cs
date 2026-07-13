@@ -70,12 +70,34 @@ namespace TS3AudioBot
 
 		// ReSharper disable UnusedMember.Global
 		[Command("add")]
-		public static async Task CommandAdd(PlayManager playManager, InvokerData invoker, string url, params string[] attributes)
-			=> await playManager.Enqueue(invoker, url, meta: PlayManager.ParseAttributes(attributes));
+		public static async Task CommandAdd(PlayManager playManager, InvokerData invoker, UserSession session, ResolveContext resolver, string query)
+		{
+			EnsureSongIsPlaying(playManager);
+
+			if (int.TryParse(query, out var selection))
+			{
+				await playManager.Enqueue(invoker, session.GetSingleSearchResult(selection));
+				return;
+			}
+
+			var results = await resolver.Search("kuwo", query);
+			if (results.Count == 0)
+				throw new CommandException(strings.cmd_search_no_result, CommandExceptionReason.CommandError);
+			await playManager.Enqueue(invoker, results[0]);
+		}
 
 		[Command("add")]
 		public static async Task CommandAdd(PlayManager playManager, InvokerData invoker, IAudioResourceResult rsc, params string[] attributes)
-			=> await playManager.Enqueue(invoker, rsc.AudioResource, meta: PlayManager.ParseAttributes(attributes));
+		{
+			EnsureSongIsPlaying(playManager);
+			await playManager.Enqueue(invoker, rsc.AudioResource, meta: PlayManager.ParseAttributes(attributes));
+		}
+
+		private static void EnsureSongIsPlaying(PlayManager playManager)
+		{
+			if (!playManager.IsPlaying)
+				throw new CommandException("当前没有正在播放的歌曲，无法添加下一首。", CommandExceptionReason.CommandError);
+		}
 
 		[Command("alias add")]
 		public static void CommandAliasAdd(CommandManager commandManager, ConfBot confBot, string commandName, string command)
