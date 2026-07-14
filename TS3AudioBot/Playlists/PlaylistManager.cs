@@ -62,11 +62,11 @@ namespace TS3AudioBot.Playlists
 			shuffle = NormalOrder;
 		}
 
-		public PlaylistItem? Next(bool manually = true) => MoveIndex(forward: true, manually);
+		public PlaylistItem? Next(bool manually = true, bool wrapAtEnd = true) => MoveIndex(forward: true, manually, wrapAtEnd);
 
 		public PlaylistItem? Previous(bool manually = true) => MoveIndex(forward: false, manually);
 
-		internal PlaylistItem? MoveIndex(bool? forward, bool manually)
+		internal PlaylistItem? MoveIndex(bool? forward, bool manually, bool wrapAtEnd = true)
 		{
 			lock (listLock)
 			{
@@ -97,7 +97,7 @@ namespace TS3AudioBot.Playlists
 				// but was requested manually we act as if the list was looped.
 				// This will give a more intuitive behaviour when the list is shuffeled (and also if not)
 				// as the end might not be clear or visible.
-				if (Loop == LoopMode.Off && listEnded && !manually)
+				if (Loop == LoopMode.Off && listEnded && (!manually || !wrapAtEnd))
 					return null;
 
 				return mixList[shuffle.Index];

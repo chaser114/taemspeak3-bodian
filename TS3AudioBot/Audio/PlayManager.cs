@@ -75,6 +75,17 @@ namespace TS3AudioBot.Audio
 			return PostEnqueue(invoker, startOff);
 		}
 
+		public void ClearQueue()
+		{
+			var current = CurrentPlayData;
+			playlistManager.Clear();
+			if (current is null)
+				return;
+
+			playlistManager.Queue(PlaylistItem.From(current.PlayResource));
+			playlistManager.Index = 0;
+		}
+
 		private static PlaylistItem UpdateItem(InvokerData invoker, PlaylistItem item)
 		{
 			item.PlayInfo ??= new PlayInfo();
@@ -224,7 +235,7 @@ namespace TS3AudioBot.Audio
 			PlaylistItem? pli = null;
 			for (int i = 0; i < 10; i++)
 			{
-				pli = playlistManager.Next(manually);
+				pli = playlistManager.Next(manually, wrapAtEnd: false);
 				if (pli is null) break;
 				try
 				{

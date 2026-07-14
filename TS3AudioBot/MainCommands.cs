@@ -388,7 +388,7 @@ namespace TS3AudioBot
 		}
 
 		[Command("clear")]
-		public static void CommandClear(PlaylistManager playlistManager) => playlistManager.Clear();
+		public static void CommandClear(PlayManager playManager) => playManager.ClearQueue();
 
 		[Command("command parse", "cmd_parse_command_help")]
 		public static JsonValue<AstNode> CommandParse(string parameter)

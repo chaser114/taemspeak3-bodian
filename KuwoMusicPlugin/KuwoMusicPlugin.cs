@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using TS3AudioBot;
 using TS3AudioBot.Helper;
 using TS3AudioBot.ResourceFactories;
 
@@ -12,11 +13,14 @@ namespace KuwoMusicPlugin
 	// TS3AudioBot loads a single IResolver implementation from this DLL.
 	public sealed class KuwoMusicPlugin : IResourceResolver, ISearchResolver, IThumbnailResolver
 	{
+		private static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
 		private const string ApiUrl = "https://api.xingzhige.com/API/Kuwo_BD_new/";
 		private const string AudioUrlKey = "audio_url";
 		private const string CoverUrlKey = "cover_url";
 		private const string QueryKey = "query";
 		private const string SelectionKey = "selection";
+		private const string ResolvedAtKey = "resolved_at";
+		private static readonly TimeSpan AudioUrlLifetime = TimeSpan.FromHours(12);
 
 		public string ResolverFor => "kuwo";
 
@@ -33,7 +37,7 @@ namespace KuwoMusicPlugin
 		public async Task<PlayResource> GetResourceById(ResolveContext _, AudioResource resource)
 		{
 			var audioUrl = resource.Get(AudioUrlKey);
-			if (string.IsNullOrWhiteSpace(audioUrl))
+			if (ShouldRefreshAudioUrl(resource, audioUrl))
 			{
 				var query = resource.Get(QueryKey);
 				var selection = resource.Get(SelectionKey);
@@ -47,6 +51,8 @@ namespace KuwoMusicPlugin
 				audioUrl = resource.Get(AudioUrlKey);
 			}
 
+			if (string.IsNullOrWhiteSpace(audioUrl))
+				throw new InvalidOperationException("The Kuwo resource does not contain a playable song.");
 			return new PlayResource(audioUrl!, resource);
 		}
 
@@ -57,10 +63,10 @@ namespace KuwoMusicPlugin
 			if (string.IsNullOrWhiteSpace(keyword))
 				throw new InvalidOperationException("A search query is required.");
 
-			var requests = Enumerable.Range(1, 10).Select(number => RequestSong(keyword, number));
-			var songs = await Task.WhenAll(requests);
-			return songs.Where(song => song != null)
-				.Select((song, index) => ToResource(song!, keyword, index + 1))
+			var requests = Enumerable.Range(1, 10).Select(number => RequestResource(keyword, number));
+			var resources = await Task.WhenAll(requests);
+			return resources.Where(resource => resource != null)
+				.Select(resource => resource!)
 				.ToList();
 		}
 
@@ -83,7 +89,8 @@ namespace KuwoMusicPlugin
 				.Add(AudioUrlKey, audioUrl)
 				.Add(CoverUrlKey, song.cover ?? string.Empty)
 				.Add(QueryKey, query)
-				.Add(SelectionKey, selection.ToString(CultureInfo.InvariantCulture));
+				.Add(SelectionKey, selection.ToString(CultureInfo.InvariantCulture))
+				.Add(ResolvedAtKey, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
 		}
 
 		private static async Task<KuwoSong?> RequestSong(string keyword, int number)
@@ -91,6 +98,34 @@ namespace KuwoMusicPlugin
 			var url = $"{ApiUrl}?name={Uri.EscapeDataString(keyword)}&n={number.ToString(CultureInfo.InvariantCulture)}";
 			var response = await WebWrapper.Request(url).AsJson<KuwoResponse>();
 			return response.code == 0 ? response.data : null;
+		}
+
+		private static bool ShouldRefreshAudioUrl(AudioResource resource, string? audioUrl)
+		{
+			if (string.IsNullOrWhiteSpace(audioUrl))
+				return true;
+			if (!long.TryParse(resource.Get(ResolvedAtKey), NumberStyles.None, CultureInfo.InvariantCulture, out var timestamp))
+				return true;
+			return DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(timestamp) >= AudioUrlLifetime;
+		}
+
+		private static async Task<AudioResource?> RequestResource(string keyword, int number)
+		{
+			try
+			{
+				var song = await RequestSong(keyword, number);
+				return song is null ? null : ToResource(song, keyword, number);
+			}
+			catch (AudioBotException ex)
+			{
+				Log.Debug(ex, "Kuwo search result {0} could not be loaded.", number);
+				return null;
+			}
+			catch (InvalidOperationException ex)
+			{
+				Log.Debug(ex, "Kuwo search result {0} was invalid.", number);
+				return null;
+			}
 		}
 
 		public void Dispose() { }
