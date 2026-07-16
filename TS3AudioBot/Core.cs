@@ -71,9 +71,11 @@ namespace TS3AudioBot
 			builder.RequestModule<SystemMonitor>();
 			builder.RequestModule<DbStore>();
 			builder.RequestModule<PluginManager>();
-			builder.RequestModule<WebServer>();
+			builder.RequestModule<WebAccountService>();
 			builder.RequestModule<RightsManager>();
 			builder.RequestModule<BotManager>();
+			builder.RequestModule<WebConsoleService>();
+			builder.RequestModule<WebServer>();
 			builder.RequestModule<TokenManager>();
 			builder.RequestModule<CommandManager>();
 			builder.RequestModule<ResourceResolver>();
@@ -86,6 +88,7 @@ namespace TS3AudioBot
 			YoutubeDlHelper.DataObj = config.Tools.YoutubeDl;
 
 			injector.GetModuleOrThrow<CommandManager>().RegisterCollection(MainCommands.Bag);
+			injector.GetModuleOrThrow<PluginManager>().StartFactoryPlugins();
 			injector.GetModuleOrThrow<RightsManager>().CreateConfigIfNotExists(setup.Interactive);
 			injector.GetModuleOrThrow<WebServer>().StartWebServer();
 			injector.GetModuleOrThrow<Stats>().StartTimer(setup.SendStats);

@@ -3,10 +3,8 @@
 Ubuntu 22.04 x64：
 
 ```bash
-sudo apt update
-sudo apt install -y ffmpeg libopus-dev
-chmod +x start.sh
-./start.sh
+chmod +x install-linux.sh
+./install-linux.sh
 ```
 
-`ffmpeg` 用于音频转码，`libopus-dev` 提供 TeamSpeak 音频编码所需的 `libopus.so`。
+脚本会安装 `ffmpeg` 和 `libopus0`，然后启动机器人。启动后访问 `http://服务器IP:58913` 完成网页端首次设置。

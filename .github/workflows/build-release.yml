@@ -26,6 +26,11 @@ jobs:
         with:
           dotnet-version: 6.0.x
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - name: Restore dependencies
         run: |
           dotnet restore TS3AudioBot/TS3AudioBot.csproj
@@ -36,24 +41,43 @@ jobs:
           dotnet build TS3AudioBot/TS3AudioBot.csproj --configuration Release --no-restore
           dotnet build KuwoMusicPlugin/KuwoMusicPlugin.csproj --configuration Release --no-restore
 
+      - name: Build web console
+        run: |
+          cd WebInterface
+          npm ci
+          NODE_OPTIONS=--openssl-legacy-provider npm run build
+
+      - name: Validate Docker deployment
+        run: |
+          docker compose config
+          docker build --tag bodian-music:ci .
+
       - name: Publish Linux package
         run: |
           dotnet publish TS3AudioBot/TS3AudioBot.csproj --configuration Release --runtime linux-x64 --self-contained true --output artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64
           mkdir -p artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/plugins
+          mkdir -p artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/WebInterface
           cp KuwoMusicPlugin/bin/Release/net6.0/KuwoMusicPlugin.dll artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/plugins/
-          cp packaging/linux/start.sh packaging/linux/README.md artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/
-          chmod +x artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/TS3AudioBot artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/start.sh
+          cp -a WebInterface/dist/. artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/WebInterface/
+          cp packaging/linux/start.sh packaging/linux/install-linux.sh packaging/linux/README.md artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/
+          mkdir -p artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/run
+          cp run/start-linux.sh artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/run/
+          chmod +x artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/TS3AudioBot artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/start.sh artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/install-linux.sh artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/run/start-linux.sh
           tar -C artifacts/linux -czf artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz TS3AudioBot-KuwoPlugin-linux-x64
 
       - name: Publish Windows package
         run: |
           dotnet publish TS3AudioBot/TS3AudioBot.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64
           mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/plugins
+          mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/WebInterface
           cp KuwoMusicPlugin/bin/Release/net6.0/KuwoMusicPlugin.dll artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/plugins/
+          cp -a WebInterface/dist/. artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/WebInterface/
           curl --fail --location --retry 3 --output /tmp/ffmpeg.zip https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
           unzip -q /tmp/ffmpeg.zip -d /tmp/ffmpeg
           cp /tmp/ffmpeg/*/bin/ffmpeg.exe artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/
-          cp packaging/windows/start.cmd packaging/windows/README.md artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/
+          cp packaging/windows/start.bat packaging/windows/start-web-console.bat packaging/windows/README.md artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/
+          mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/run
+          cp run/start-web-console.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/run/
           cd artifacts/windows && zip -qr ../TS3AudioBot-KuwoPlugin-windows-x64.zip TS3AudioBot-KuwoPlugin-windows-x64
 
       - name: Upload workflow artifacts

@@ -1,0 +1,14 @@
+.git
+.github
+.dotnet
+.plugin-smoke
+**/bin
+**/obj
+WebInterface/node_modules
+WebInterface/dist
+data
+发布版
+搭建包
+docs/aegis
+*.db
+*.log

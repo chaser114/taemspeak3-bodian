@@ -43,14 +43,12 @@
 # Playing rights
 [[rule]]
 	# Set Group Ids you want to allow here, ex: [ 13, 42 ]
-	groupid = []
-	# And/Or Client Uids here, ex [ "uA0U7t4PBxdJ5TLnarsOHQh4/tY=", "8CnUQzwT/d9nHNeUaed0RPsDxxk=" ]
-	useruid = []
-	# Or remove groupid and useruid to allow for everyone
+	# No matcher: every TeamSpeak member may request music.
 
 	"+" = [
 		# Play controls
 		"cmd.play",
+		"cmd.search",
 		"cmd.pause",
 		"cmd.stop",
 		"cmd.seek",
@@ -59,7 +57,6 @@
 		# Playlist management
 		"cmd.list.*",
 		"cmd.add",
-		"cmd.clear",
 		"cmd.previous",
 		"cmd.next",
 		"cmd.random.*",

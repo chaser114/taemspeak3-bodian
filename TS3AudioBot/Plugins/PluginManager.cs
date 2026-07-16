@@ -154,6 +154,19 @@ namespace TS3AudioBot.Plugins
 			}
 		}
 
+		/// <summary>Loads factory plugins during startup so resolvers are available before the first bot or web request.</summary>
+		public PluginResponse[] StartFactoryPlugins()
+		{
+			lock (pluginsLock)
+			{
+				CheckAndClearPlugins(null);
+				return plugins.Values
+					.Where(plugin => plugin.Type == PluginType.Factory)
+					.Select(plugin => plugin.Start(null))
+					.ToArray();
+			}
+		}
+
 		public PluginResponse StopPlugin(string identifier, Bot? bot)
 		{
 			lock (pluginsLock)

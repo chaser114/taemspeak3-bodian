@@ -1,0 +1,9 @@
+services:
+  ts3bot:
+    build: .
+    container_name: bodian-music
+    restart: unless-stopped
+    ports:
+      - "58913:58913"
+    volumes:
+      - ./data:/data

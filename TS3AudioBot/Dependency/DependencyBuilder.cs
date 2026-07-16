@@ -93,7 +93,10 @@ namespace TS3AudioBot.Dependency
 				else
 				{
 					if (!injector.TryCreate(cur.TImplementation, out obj))
+					{
+						Log.Error("Could not create requested module {0}.", cur.TImplementation.Name);
 						return false;
+					}
 					injector.AddModule(cur.TService, obj);
 				}
 			}

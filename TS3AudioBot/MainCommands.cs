@@ -74,9 +74,9 @@ namespace TS3AudioBot
 		{
 			EnsureSongIsPlaying(playManager);
 
-			if (int.TryParse(query, out var selection))
+			if (int.TryParse(query, out var selection) && session.TryGetSearchResult(selection, out var selected))
 			{
-				await playManager.Enqueue(invoker, session.GetSingleSearchResult(selection));
+				await playManager.Enqueue(invoker, selected);
 				return;
 			}
 
@@ -1215,9 +1215,9 @@ namespace TS3AudioBot
 		[Command("play")]
 		public static async Task CommandPlay(PlayManager playManager, InvokerData invoker, UserSession session, ResolveContext resolver, string query)
 		{
-			if (int.TryParse(query, out var selection))
+			if (int.TryParse(query, out var selection) && session.TryGetSearchResult(selection, out var selected))
 			{
-				await playManager.Play(invoker, session.GetSingleSearchResult(selection));
+				await playManager.Play(invoker, selected);
 				return;
 			}
 
@@ -1421,6 +1421,16 @@ namespace TS3AudioBot
 			var list = await resolver.Search("kuwo", string.Join(" ", query));
 			session.Set(SessionConst.SearchResult, list);
 			return FormatSearchResult(list, callerInfo);
+		}
+
+		private static bool TryGetSearchResult(this UserSession session, int index, out AudioResource result)
+		{
+			result = default!;
+			if (index < 0) return false;
+			var list = session.GetSearchResult();
+			if (index >= list.Count) return false;
+			result = list[index];
+			return true;
 		}
 
 		// Kept for internal callers; public !search always uses the Kuwo plugin.
