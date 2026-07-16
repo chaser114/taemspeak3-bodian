@@ -47,10 +47,11 @@ jobs:
           npm ci
           NODE_OPTIONS=--openssl-legacy-provider npm run build
 
-      - name: Validate Docker deployment
-        run: |
-          docker compose config
-          docker build --progress=plain --tag bodian-music:ci .
+      - name: Validate Docker Compose configuration
+        run: docker compose config
+
+      - name: Build Docker image
+        run: docker build --progress=plain --tag bodian-music:ci .
 
       - name: Publish Linux package
         run: |
