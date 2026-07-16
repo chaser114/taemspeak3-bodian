@@ -3,7 +3,10 @@ RUN apt-get update && apt-get install -y curl ca-certificates && curl -fsSL http
 WORKDIR /src
 COPY . .
 RUN cd WebInterface && npm ci && NODE_OPTIONS=--openssl-legacy-provider npm run build
-RUN dotnet restore TS3AudioBot/TS3AudioBot.csproj && dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj && dotnet build KuwoMusicPlugin/KuwoMusicPlugin.csproj -c Release --no-restore && dotnet publish TS3AudioBot/TS3AudioBot.csproj -c Release -r linux-x64 --self-contained true --no-restore -o /app
+RUN dotnet restore TS3AudioBot/TS3AudioBot.csproj --runtime linux-x64 \
+    && dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj --runtime linux-x64 \
+    && dotnet build KuwoMusicPlugin/KuwoMusicPlugin.csproj -c Release --no-restore \
+    && dotnet publish TS3AudioBot/TS3AudioBot.csproj -c Release -r linux-x64 --self-contained true --no-restore -o /app
 RUN mkdir -p /app/plugins /app/WebInterface && cp KuwoMusicPlugin/bin/Release/net6.0/KuwoMusicPlugin.dll /app/plugins/ && cp -a WebInterface/dist/. /app/WebInterface/
 FROM debian:12-slim
 RUN apt-get update && apt-get install -y ffmpeg libopus0 ca-certificates && rm -rf /var/lib/apt/lists/*

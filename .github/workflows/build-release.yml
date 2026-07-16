@@ -50,7 +50,7 @@ jobs:
       - name: Validate Docker deployment
         run: |
           docker compose config
-          docker build --tag bodian-music:ci .
+          docker build --progress=plain --tag bodian-music:ci .
 
       - name: Publish Linux package
         run: |
