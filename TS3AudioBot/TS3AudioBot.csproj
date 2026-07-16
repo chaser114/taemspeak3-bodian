@@ -92,7 +92,7 @@
     </EmbeddedResource>
   </ItemGroup>
 
-  <Target Name="GenerateGitVersion" BeforeTargets="BeforeCompile">
+  <Target Name="GenerateGitVersion" BeforeTargets="BeforeCompile" Condition="'$(SkipGitVersion)' != 'true'">
     <ItemGroup>
       <VersionBuildScript Include="build.csx" />
       <VersionBuildOutputFile Include="$(IntermediateOutputPath)Version.g.cs" />
