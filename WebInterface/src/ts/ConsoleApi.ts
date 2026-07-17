@@ -1,5 +1,6 @@
 export interface ConsoleStatus { initialized: boolean; brandName: string; botConfigured?: boolean; }
 export interface ConsoleUser { username: string; role: string; brandName: string; }
+export interface ConsoleBot { id: string; name: string; address?: string | null; status: string; }
 export interface TrackResource { type: string; resid: string; title?: string; add?: { [key: string]: string }; }
 export interface Track { resource: TrackResource; title: string; type: string; coverUrl?: string; active: boolean; }
 export interface MusicState { configured: boolean; connected: boolean; current: Track | null; paused?: boolean; position?: number; length?: number; queue: Track[]; recent: Track[]; }

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -21,6 +22,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using TS3AudioBot.Config;
 using TS3AudioBot.Dependency;
+using TS3AudioBot.ResourceFactories;
 
 namespace TS3AudioBot.Web
 {
@@ -112,19 +114,9 @@ namespace TS3AudioBot.Web
 				{
 					kestrel.Limits.MaxRequestBodySize = 3_000_000; // 3 MiB should be enough
 				})
-				.ConfigureServices(services =>
-				{
-					services.AddCors(options =>
-					{
-						options.AddPolicy("TS3AB", builder =>
-						{
-							builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
-						});
-					});
-				})
+				.ConfigureServices(_ => { })
 				.Configure(app =>
 				{
-					app.UseCors("TS3AB");
 					app.Map(new PathString("/console-api"), map => map.Run(HandleConsoleApi));
 					app.Use(async (ctx, next) =>
 					{
@@ -204,6 +196,25 @@ namespace TS3AudioBot.Web
 
 		private async Task HandleConsoleApi(HttpContext ctx)
 		{
+			try
+			{
+				await HandleConsoleApiCore(ctx);
+			}
+			catch (JsonReaderException ex)
+			{
+				Log.Debug(ex, "Malformed console API JSON request.");
+				await WriteError(ctx, "请求数据不是有效的 JSON。", StatusCodes.Status400BadRequest);
+			}
+			catch (Exception ex)
+			{
+				Log.Error(ex, "Unhandled console API error for {0} {1}", ctx.Request.Method, ctx.Request.Path);
+				if (!ctx.Response.HasStarted)
+					await WriteError(ctx, "服务器处理请求时发生错误。", StatusCodes.Status500InternalServerError);
+			}
+		}
+
+		private async Task HandleConsoleApiCore(HttpContext ctx)
+		{
 			var path = ctx.Request.Path.Value?.Trim('/').ToLowerInvariant();
 			ctx.Response.ContentType = "application/json; charset=utf-8";
 			if (path == "status") { await WriteJson(ctx, new { initialized = webAccounts.IsInitialized, brandName = webAccounts.BrandName, botConfigured = rootConfig.GetAllBots()?.Length > 0 }); return; }
@@ -220,13 +231,16 @@ namespace TS3AudioBot.Web
 			var account = webAccounts.GetAccount(ctx.Request.Cookies["ts3ab_session"]);
 			if (account is null) { await WriteError(ctx, "请先登录。", StatusCodes.Status401Unauthorized); return; }
 			if (path == "me") { await WriteJson(ctx, new { username = account.Username, role = account.Role.ToString().ToLowerInvariant(), brandName = webAccounts.BrandName }); return; }
-			if (path == "bots" && account.Role == WebAccountRole.Admin)
+			if (path == "bots")
 			{
-				var active = botManager.GetBotInfolist().ToDictionary(x => x.Name ?? string.Empty);
+				var active = botManager.GetBotInfolist()
+					.Where(x => !string.IsNullOrWhiteSpace(x.Name))
+					.GroupBy(x => x.Name!, StringComparer.Ordinal)
+					.ToDictionary(x => x.Key, x => x.First(), StringComparer.Ordinal);
 				var bots = (rootConfig.GetAllBots() ?? Array.Empty<ConfBot>()).Select(config =>
 				{
-					active.TryGetValue(config.Name, out var info);
-					return new { id = config.Name, name = config.Connect.Name.Value, address = config.Connect.Address.Value, status = info?.Status.ToString().ToLowerInvariant() ?? "offline" };
+					active.TryGetValue(config.Name ?? string.Empty, out var info);
+					return new { id = config.Name, name = config.Connect.Name.Value, address = account.Role == WebAccountRole.Admin ? config.Connect.Address.Value : null, status = info?.Status.ToString().ToLowerInvariant() ?? "offline" };
 				});
 				await WriteJson(ctx, new { bots }); return;
 			}
@@ -240,18 +254,20 @@ namespace TS3AudioBot.Web
 				rootConfig.ClearBotConfigCache(id);
 				await WriteJson(ctx, new { ok = true }); return;
 			}
-			if (path == "music/state") { await WriteJson(ctx, await console.GetState()); return; }
+			if (path == "music/state") { await WriteJson(ctx, await console.GetState(ctx.Request.Query["botId"].ToString())); return; }
 			if (path == "music/search" && ctx.Request.Method == "POST")
-			{ try { await WriteJson(ctx, new { results = await console.Search((await ReadJson(ctx)).Value<string>("query") ?? string.Empty) }); } catch (Exception ex) { await WriteError(ctx, ex.Message, 400); } return; }
+			{ try { var body = await ReadJson(ctx); await WriteJson(ctx, new { results = await console.Search(body.Value<string>("query") ?? string.Empty, body.Value<string>("botId")) }); } catch (JsonReaderException) { throw; } catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); } catch (Exception ex) { Log.Warn(ex, "Console music search failed."); await WriteError(ctx, "搜索失败，请稍后重试。", StatusCodes.Status422UnprocessableEntity); } return; }
 			if ((path == "music/play" || path == "music/add") && ctx.Request.Method == "POST")
 			{
-				try { var resource = (await ReadJson(ctx)).Value<JObject>("resource")?.ToObject<ResourceFactories.AudioResource>(); if (resource is null) throw new ArgumentException("歌曲数据无效。"); if (path == "music/play") await console.Play(account.Username, resource); else await console.Add(account.Username, resource); await WriteJson(ctx, new { ok = true }); }
-				catch (Exception ex) { await WriteError(ctx, ex.Message, 422); } return;
+				try { var body = await ReadJson(ctx); var resource = ParseKuwoResource(body.Value<JObject>("resource")); if (path == "music/play") await console.Play(account.Username, resource, body.Value<string>("botId")); else await console.Add(account.Username, resource, body.Value<string>("botId")); await WriteJson(ctx, new { ok = true }); }
+				catch (JsonReaderException) { throw; }
+				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
+				catch (Exception ex) { Log.Warn(ex, "Console music playback request failed."); await WriteError(ctx, "播放失败，请稍后重试。", StatusCodes.Status422UnprocessableEntity); } return;
 			}
-			if (path == "music/next" && ctx.Request.Method == "POST") { await ExecuteMusic(ctx, () => console.Next(account.Username)); return; }
-			if (path == "music/previous" && ctx.Request.Method == "POST") { await ExecuteMusic(ctx, () => console.Previous(account.Username)); return; }
-			if (path == "music/pause" && ctx.Request.Method == "POST") { await ExecuteMusic(ctx, console.TogglePause); return; }
-			if (path == "music/clear" && ctx.Request.Method == "POST") { if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "只有管理员可以清空待播队列。", 403); return; } await ExecuteMusic(ctx, console.Clear); return; }
+			if (path == "music/next" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.Next(account.Username, body.Value<string>("botId"))); return; }
+			if (path == "music/previous" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.Previous(account.Username, body.Value<string>("botId"))); return; }
+			if (path == "music/pause" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.TogglePause(body.Value<string>("botId"))); return; }
+			if (path == "music/clear" && ctx.Request.Method == "POST") { if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "只有管理员可以清空待播队列。", 403); return; } var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.Clear(body.Value<string>("botId"))); return; }
 			if (path == "settings/brand" && ctx.Request.Method == "POST")
 			{
 				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可修改品牌名称。", StatusCodes.Status403Forbidden); return; }
@@ -286,7 +302,7 @@ namespace TS3AudioBot.Web
 				var saved = existing.Ok ? config.SaveWhenExists() : config.SaveNew(id);
 				if (!saved.Ok) { await WriteError(ctx, saved.Error.Str, StatusCodes.Status500InternalServerError); return; }
 				var started = await botManager.RunBot(config);
-				if (!started.Ok) { await WriteJson(ctx, new { configured = true, connected = false, warning = started.Error }); return; }
+				if (!started.Ok) { Log.Warn("Bot {0} was configured but could not connect: {1}", id, started.Error); await WriteJson(ctx, new { configured = true, connected = false, warning = "机器人已保存，但当前未能连接 TeamSpeak。" }); return; }
 				await WriteJson(ctx, new { id = started.Value.Id, name = started.Value.Name, server = started.Value.Server });
 				return;
 			}
@@ -297,13 +313,36 @@ namespace TS3AudioBot.Web
 
 		private async Task CreateSession(HttpContext ctx, string username, string password)
 		{
-			var session = webAccounts.Login(username, password);
+			var clientKey = ctx.Connection.RemoteIpAddress?.ToString();
+			var session = webAccounts.Login(username, password, clientKey);
 			if (session is null) { await WriteError(ctx, "账号或密码错误。", StatusCodes.Status401Unauthorized); return; }
-			ctx.Response.Cookies.Append("ts3ab_session", session, new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Lax, Secure = ctx.Request.IsHttps, MaxAge = TimeSpan.FromDays(14) });
+			var forwardedProto = ctx.Request.Headers["X-Forwarded-Proto"].ToString();
+			var isHttps = ctx.Request.IsHttps || string.Equals(forwardedProto, "https", StringComparison.OrdinalIgnoreCase);
+			ctx.Response.Cookies.Append("ts3ab_session", session, new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Lax, Secure = isHttps, MaxAge = TimeSpan.FromDays(14) });
 			await WriteJson(ctx, new { username, brandName = webAccounts.BrandName });
 		}
 		private static async Task<JObject> ReadJson(HttpContext ctx) { using var reader = new StreamReader(ctx.Request.Body); var body = await reader.ReadToEndAsync(); return string.IsNullOrWhiteSpace(body) ? new JObject() : JObject.Parse(body); }
-		private static async Task ExecuteMusic(HttpContext ctx, Func<Task> action) { try { await action(); await WriteJson(ctx, new { ok = true }); } catch (Exception ex) { await WriteError(ctx, ex.Message, 422); } }
+		private static async Task ExecuteMusic(HttpContext ctx, Func<Task> action) { try { await action(); await WriteJson(ctx, new { ok = true }); } catch (Exception ex) { Log.Warn(ex, "Console music control failed."); await WriteError(ctx, "音乐控制失败，请稍后重试。", StatusCodes.Status422UnprocessableEntity); } }
+		private static AudioResource ParseKuwoResource(JObject? value)
+		{
+			if (value is null) throw new ArgumentException("歌曲数据无效。");
+			var type = value.Value<string>("type");
+			var resid = value.Value<string>("resid");
+			var title = value.Value<string>("title");
+			var add = value["add"] as JObject;
+			var query = add?.Value<string>("query")?.Trim();
+			var selection = add?.Value<string>("selection");
+			if (!string.Equals(type, "kuwo", StringComparison.OrdinalIgnoreCase)
+				|| string.IsNullOrWhiteSpace(resid)
+				|| !long.TryParse(resid, NumberStyles.None, CultureInfo.InvariantCulture, out var id)
+				|| id <= 0
+				|| string.IsNullOrWhiteSpace(query) || query.Length > 200
+				|| !int.TryParse(selection, NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 1 || number > 10)
+				throw new ArgumentException("歌曲数据无效，请重新搜索后选择。");
+			return new AudioResource(id.ToString(CultureInfo.InvariantCulture), string.IsNullOrWhiteSpace(title) ? null : title.Substring(0, Math.Min(title.Length, 200)), "kuwo")
+				.Add("query", query)
+				.Add("selection", number.ToString(CultureInfo.InvariantCulture));
+		}
 		private static Task WriteJson(HttpContext ctx, object value) => ctx.Response.WriteAsync(JsonConvert.SerializeObject(value));
 		private static async Task WriteError(HttpContext ctx, string error, int status) { ctx.Response.StatusCode = status; await WriteJson(ctx, new { error }); }
 

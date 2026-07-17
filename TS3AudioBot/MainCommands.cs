@@ -74,7 +74,7 @@ namespace TS3AudioBot
 		{
 			EnsureSongIsPlaying(playManager);
 
-			if (int.TryParse(query, out var selection) && session.TryGetSearchResult(selection, out var selected))
+			if (TryParseSearchSelection(query, out var selection) && session.TryGetSearchResult(selection, out var selected))
 			{
 				await playManager.Enqueue(invoker, selected);
 				return;
@@ -1215,7 +1215,7 @@ namespace TS3AudioBot
 		[Command("play")]
 		public static async Task CommandPlay(PlayManager playManager, InvokerData invoker, UserSession session, ResolveContext resolver, string query)
 		{
-			if (int.TryParse(query, out var selection) && session.TryGetSearchResult(selection, out var selected))
+			if (TryParseSearchSelection(query, out var selection) && session.TryGetSearchResult(selection, out var selected))
 			{
 				await playManager.Play(invoker, selected);
 				return;
@@ -1401,8 +1401,8 @@ namespace TS3AudioBot
 				var tmb = new TextModBuilder(callerInfo.IsColor);
 				tmb.AppendFormat(
 					strings.cmd_search_header.Mod().Bold(),
-					$"!play <{strings.info_number}>".Mod().Italic(),
-					$"!play <{strings.info_number}>".Mod().Italic()).Append("\n");
+					$"!play #<{strings.info_number}>".Mod().Italic(),
+					$"!play #<{strings.info_number}>".Mod().Italic()).Append("\n");
 				for (int i = 0; i < searchResults.Count; i++)
 				{
 					tmb.AppendFormat("{0}: {1}\n", i.ToString().Mod().Bold(), searchResults[i].ResourceTitle);
@@ -1411,7 +1411,7 @@ namespace TS3AudioBot
 				return tmb.ToString();
 			});
 
-		// Search selection is handled by !play <number> in this customized build.
+		// Search selection is handled by !play #<number> in this customized build.
 		public static async Task CommandSearchAdd(PlayManager playManager, InvokerData invoker, UserSession session, int index)
 			=> await playManager.Enqueue(invoker, session.GetSingleSearchResult(index));
 
@@ -1421,6 +1421,16 @@ namespace TS3AudioBot
 			var list = await resolver.Search("kuwo", string.Join(" ", query));
 			session.Set(SessionConst.SearchResult, list);
 			return FormatSearchResult(list, callerInfo);
+		}
+
+		// A bare number is a valid song title. Prefix search-result indexes with '#'.
+		private static bool TryParseSearchSelection(string query, out int selection)
+		{
+			selection = -1;
+			if (string.IsNullOrWhiteSpace(query)) return false;
+			var value = query.Trim();
+			return value.StartsWith("#", StringComparison.Ordinal)
+				&& int.TryParse(value.Substring(1), NumberStyles.None, CultureInfo.InvariantCulture, out selection);
 		}
 
 		private static bool TryGetSearchResult(this UserSession session, int index, out AudioResource result)
