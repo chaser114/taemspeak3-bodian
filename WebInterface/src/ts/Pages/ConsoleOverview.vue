@@ -6,7 +6,7 @@
         <p>{{ recentOnly ? '最近播放' : '点歌' }}</p>
         <h1>{{ recentOnly ? '最近播放' : '想听什么？' }}</h1>
         <span v-if="!recentOnly">在顶部搜索框中搜索歌曲、歌手或专辑。</span>
-        <label v-if="bots.length" class="bot-select">控制机器人<select v-model="botId" @change="refresh"><option v-for="bot in bots" :key="bot.id" :value="bot.id">{{ bot.name }} · {{ statusText(bot.status) }}</option></select></label>
+        <label v-if="bots.length" class="bot-select">控制机器人<select v-model="botId" @change="selectBot"><option v-for="bot in bots" :key="bot.id" :value="bot.id">{{ bot.name }} · {{ statusText(bot.status) }}</option></select></label>
       </header>
       <p v-if="error" class="error">{{ error }}</p>
 
@@ -69,13 +69,26 @@ export default Vue.extend({
     window.removeEventListener("console-search", this.listener);
   },
   watch: {
-    "$route.query.q"(value: string) { if (value) this.search(value); },
+    "$route.query.q"(value: string) { if (value) this.search(value); else this.results = []; },
   },
   methods: {
     cover(track: TrackResource) { return track.add && track.add.cover_url; },
     statusText(status: string) { return status === "connected" ? "已连接" : status === "connecting" ? "连接中" : "离线"; },
-    async refresh() { this.state = await consoleApi<MusicState>("music/state?botId=" + encodeURIComponent(this.botId)); },
-    async search(query: string) { if (query) this.results = (await consoleApi<{ results: TrackResource[] }>("music/search", { query, botId: this.botId })).results; },
+    async refresh() {
+      try { this.state = await consoleApi<MusicState>("music/state?botId=" + encodeURIComponent(this.botId)); }
+      catch (error) { this.error = error instanceof Error ? error.message : "状态同步失败。"; }
+    },
+    async search(query: string) {
+      if (!query) return;
+      try { this.results = (await consoleApi<{ results: TrackResource[] }>("music/search", { query, botId: this.botId })).results; this.error = ""; }
+      catch (error) { this.error = error instanceof Error ? error.message : "搜索失败。"; }
+    },
+    async selectBot() {
+      this.results = [];
+      await this.refresh();
+      const query = this.$route.query.q;
+      if (!this.recentOnly && typeof query === "string" && query) await this.search(query);
+    },
     async call(path: string, body: any = {}) {
       try { await consoleApi(path, { ...body, botId: this.botId }); await this.refresh(); }
       catch (error) { this.error = error instanceof Error ? error.message : "操作失败。"; }

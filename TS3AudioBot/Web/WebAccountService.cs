@@ -81,7 +81,7 @@ namespace TS3AudioBot.Web
 				if (IsLoginBlocked(attemptKey)) return null;
 				var account = accounts.FindById(username);
 				var valid = account != null && account.Enabled && Verify(password, account);
-				if (account == null) _ = Hash(password, DummySalt);
+				if (account == null || !account.Enabled) _ = Hash(password, DummySalt);
 				if (!valid)
 				{
 					RegisterLoginFailure(attemptKey);

@@ -19,7 +19,7 @@
 
     <div class="timeline">
       <div class="progress-track"><i :style="{ width: progress + '%' }"></i></div>
-      <small>{{ time(state.position || 0) }} / {{ time(state.length || 0) }}</small>
+      <small>{{ time(livePosition) }} / {{ time(state.length || 0) }}</small>
     </div>
 
     <button class="queue-button" title="待播队列" aria-label="待播队列" @click="$emit('queue')">
@@ -34,17 +34,42 @@ import { MusicState } from "../ConsoleApi";
 
 export default Vue.extend({
   props: { state: { type: Object as () => MusicState, required: true } },
-  data() { return { expanded: false }; },
+  data() {
+    const now = Date.now();
+    return { expanded: false, now, syncedAt: now, syncedPosition: 0, frameId: 0 as number };
+  },
+  mounted() { this.frameId = requestAnimationFrame(() => this.tick()); },
+  beforeDestroy() { cancelAnimationFrame(this.frameId); },
+  watch: {
+    state: {
+      immediate: true,
+      handler(state: MusicState) {
+        this.syncedPosition = state.position || 0;
+        this.syncedAt = Date.now();
+      },
+    },
+  },
   computed: {
+    livePosition(): number {
+      const state = this.state as MusicState;
+      if (!state.current) return 0;
+      const elapsed = state.paused || !state.connected ? 0 : (this.now - this.syncedAt) / 1000;
+      const position = Math.max(0, this.syncedPosition + elapsed);
+      return state.length ? Math.min(state.length, position) : position;
+    },
     progress(): number {
       const state = this.state as MusicState;
-      return state.length ? Math.min(100, state.position! / state.length * 100) : 0;
+      return state.length ? Math.min(100, this.livePosition / state.length * 100) : 0;
     },
     trackTitle(): string {
       return this.state.current ? this.state.current.title : "等待点歌";
     },
   },
   methods: {
+    tick() {
+      this.now = Date.now();
+      this.frameId = requestAnimationFrame(() => this.tick());
+    },
     time(seconds: number) {
       return Math.floor(seconds / 60) + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
     },
