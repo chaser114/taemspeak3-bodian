@@ -23,10 +23,11 @@ namespace TS3AudioBot.Web
 			this.rootConfig = rootConfig;
 		}
 
-		public async Task<object> GetState()
+		public async Task<object> GetState(string? botId = null)
 		{
-			var bot = GetBot();
+			var bot = GetBot(botId);
 			if (bot is null) return new { configured = rootConfig.GetAllBots()?.Length > 0, connected = false, current = (object?)null, queue = Array.Empty<object>(), recent = Array.Empty<object>() };
+			var connected = bot.GetInfo().Status == BotStatus.Connected;
 			return await bot.Scheduler.InvokeAsync<object>(() =>
 			{
 				var playManager = bot.Injector.GetModuleOrThrow<PlayManager>();
@@ -37,48 +38,52 @@ namespace TS3AudioBot.Web
 				var history = bot.Injector.TryGet<HistoryManager>(out var historyManager)
 					? historyManager.Search(new SeachQuery { MaxResults = 8 }).Select(x => Track(x.AudioResource, false)).ToArray()
 					: Array.Empty<object>();
-				return Task.FromResult<object>(new { configured = true, connected = true, current = current is null ? null : Track(current.ResourceData, true), paused = player.Paused, position = player.Position?.TotalSeconds ?? 0, length = player.Length?.TotalSeconds ?? 0, queue, recent = history });
+				return Task.FromResult<object>(new { configured = true, connected, current = current is null ? null : Track(current.ResourceData, true), paused = player.Paused, position = player.Position?.TotalSeconds ?? 0, length = player.Length?.TotalSeconds ?? 0, queue, recent = history });
 			});
 		}
 
-		public Task<IList<AudioResource>> Search(string query)
+		public Task<IList<AudioResource>> Search(string query, string? botId = null)
 		{
 			if (string.IsNullOrWhiteSpace(query)) throw new ArgumentException("请输入歌曲、歌手或专辑。");
-			var bot = RequireBot();
+			var bot = RequireBot(botId);
 			return bot.Scheduler.InvokeAsync(() => bot.Injector.GetModuleOrThrow<ResolveContext>().Search("kuwo", query.Trim()));
 		}
 
-		public Task Play(string username, AudioResource resource)
-			=> OnBot(username, (playManager, player, playlist) => playManager.Play(WebInvoker(username), resource));
+		public Task Play(string username, AudioResource resource, string? botId = null)
+			=> OnBot(username, botId, (playManager, player, playlist) => playManager.Play(WebInvoker(username), resource));
 
-		public Task Add(string username, AudioResource resource)
-			=> OnBot(username, (playManager, player, playlist) => playManager.Enqueue(WebInvoker(username), resource));
+		public Task Add(string username, AudioResource resource, string? botId = null)
+			=> OnBot(username, botId, (playManager, player, playlist) => playManager.Enqueue(WebInvoker(username), resource));
 
-		public Task Next(string username)
-			=> OnBot(username, (playManager, player, playlist) => playManager.Next(WebInvoker(username)));
+		public Task Next(string username, string? botId = null)
+			=> OnBot(username, botId, (playManager, player, playlist) => playManager.Next(WebInvoker(username)));
 
-		public Task Previous(string username)
-			=> OnBot(username, (playManager, player, playlist) => playManager.Previous(WebInvoker(username)));
+		public Task Previous(string username, string? botId = null)
+			=> OnBot(username, botId, (playManager, player, playlist) => playManager.Previous(WebInvoker(username)));
 
-		public Task TogglePause()
-			=> OnBot(string.Empty, (playManager, player, playlist) => { player.Paused = !player.Paused; return Task.CompletedTask; });
+		public Task TogglePause(string? botId = null)
+			=> OnBot(string.Empty, botId, (playManager, player, playlist) => { player.Paused = !player.Paused; return Task.CompletedTask; });
 
-		public Task Clear()
-			=> OnBot(string.Empty, (playManager, player, playlist) => { playManager.ClearQueue(); return Task.CompletedTask; });
+		public Task Clear(string? botId = null)
+			=> OnBot(string.Empty, botId, (playManager, player, playlist) => { playManager.ClearQueue(); return Task.CompletedTask; });
 
-		private Task OnBot(string username, Func<PlayManager, Player, PlaylistManager, Task> operation)
+		private Task OnBot(string username, string? botId, Func<PlayManager, Player, PlaylistManager, Task> operation)
 		{
-			var bot = RequireBot();
+			var bot = RequireBot(botId);
 			return bot.Scheduler.InvokeAsync(() => operation(bot.Injector.GetModuleOrThrow<PlayManager>(), bot.Injector.GetModuleOrThrow<Player>(), bot.Injector.GetModuleOrThrow<PlaylistManager>()));
 		}
 
-		private Bot RequireBot() => GetBot() ?? throw new InvalidOperationException("还没有可用的机器人，请先由管理员完成 TeamSpeak 连接配置。");
-		private Bot? GetBot()
+		private Bot RequireBot(string? botId) => GetBot(botId) ?? throw new InvalidOperationException("还没有可用的机器人，请先由管理员完成 TeamSpeak 连接配置。");
+		private Bot? GetBot(string? botId)
 		{
-			var info = botManager.GetBotInfolist().FirstOrDefault();
+			var infos = botManager.GetBotInfolist();
+			var info = string.IsNullOrWhiteSpace(botId)
+				? infos.FirstOrDefault()
+				: infos.FirstOrDefault(x => string.Equals(x.Name, botId, StringComparison.Ordinal));
 			return info?.Id is int id ? botManager.GetBotLock(id) : null;
 		}
-		private static InvokerData WebInvoker(string username) => InvokerData.Anonymous;
+		private static InvokerData WebInvoker(string username)
+			=> string.IsNullOrWhiteSpace(username) ? InvokerData.Anonymous : new InvokerData(TSLib.Uid.To("web:" + username));
 		private static object Track(AudioResource resource, bool active) => new
 		{
 			resource,

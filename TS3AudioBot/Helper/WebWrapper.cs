@@ -27,6 +27,10 @@ namespace TS3AudioBot.Helper
 		private const string TimeoutPropertyKey = "RequestTimeout";
 
 		private static readonly HttpClient httpClient = new HttpClient(new RedirectHandler(new HttpClientHandler()));
+		private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+		{
+			PropertyNameCaseInsensitive = true,
+		};
 
 		static WebWrapper()
 		{
@@ -105,7 +109,7 @@ namespace TS3AudioBot.Helper
 				{
 					using var response = await httpClient.SendDefaultAsync(request);
 					using var stream = await response.Content.ReadAsStreamAsync();
-					var obj = await JsonSerializer.DeserializeAsync<T>(stream);
+					var obj = await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions);
 					if (obj is null) throw Error.LocalStr(strings.error_net_empty_response);
 					return obj;
 				}
