@@ -116,7 +116,7 @@ export default Vue.extend({
 </script>
 
 <style scoped lang="less">
-.player-bar { position: fixed; z-index: 6; left: 216px; right: 0; top: calc(100vh - 96px); height: 96px; display: flex; align-items: center; gap: 24px; padding: 12px 34px; background: rgba(255,255,255,.97); border-top: 1px solid #dfe6e8; box-shadow: 0 -10px 28px rgba(30,50,55,.07); transition: top .36s cubic-bezier(.22,.61,.36,1), height .36s cubic-bezier(.22,.61,.36,1), gap .36s ease, padding .36s ease, background-color .36s ease, box-shadow .36s ease; }
+.player-bar { position: fixed; z-index: 6; left: 216px; right: 0; bottom: 0; height: 96px; display: flex; align-items: center; gap: 24px; padding: 12px 34px; background: rgba(255,255,255,.97); border-top: 1px solid #dfe6e8; box-shadow: 0 -10px 28px rgba(30,50,55,.07); transition: height .36s cubic-bezier(.22,.61,.36,1), gap .36s ease, padding .36s ease, background-color .36s ease, box-shadow .36s ease; }
 button { border: 0; background: transparent; cursor: pointer; }
 .track-summary { min-width: 250px; max-width: 34%; display: flex; align-items: center; gap: 12px; color: var(--console-ink); text-align: left; }
 .track-summary img, .cover-placeholder { width: 58px; height: 58px; flex: 0 0 58px; border-radius: 9px; object-fit: cover; background: #e1f1ed; display: grid; place-items: center; color: #287f74; font-size: 24px; transition: width .36s cubic-bezier(.22,.61,.36,1), height .36s cubic-bezier(.22,.61,.36,1), flex-basis .36s cubic-bezier(.22,.61,.36,1), border-radius .36s ease, transform .36s ease; }
@@ -138,7 +138,7 @@ button { border: 0; background: transparent; cursor: pointer; }
 .queue-button:active { transform: scale(.9); }
 .queue-button em { position: absolute; top: -2px; right: -2px; min-width: 17px; border-radius: 10px; background: #287f74; color: #fff; font-size: 10px; font-style: normal; }
 
-.player-bar.expanded { top: 0; left: 216px; height: 100vh; z-index: 10; flex-direction: column; justify-content: center; gap: 18px; padding: 52px 34px; background: #f7fbfa; box-shadow: 0 0 40px rgba(30,50,55,.12); }
+.player-bar.expanded { left: 216px; bottom: 0; height: 100vh; z-index: 10; flex-direction: column; justify-content: center; gap: 18px; padding: 52px 34px; background: #f7fbfa; box-shadow: 0 0 40px rgba(30,50,55,.12); }
 .expanded .track-summary { max-width: none; display: grid; text-align: center; }
 .expanded .track-summary img, .expanded .cover-placeholder { width: 46vw; height: 46vw; max-width: 340px; max-height: 340px; margin: auto; border-radius: 18px; }
 .expanded .track-copy small { margin-top: 8px; }
@@ -149,14 +149,14 @@ button { border: 0; background: transparent; cursor: pointer; }
 .back-button:hover { color: #185d55; transform: translateX(-3px); }
 
 @media (max-width: 760px) {
-  .player-bar { left: 0; top: calc(100vh - 58px - 76px); height: 76px; gap: 8px; padding: 9px 14px; }
+  .player-bar { left: 0; bottom: calc(58px + env(safe-area-inset-bottom)); height: 76px; gap: 8px; padding: 9px 14px; }
   .track-summary { min-width: 0; flex: 1; }
   .track-summary img, .cover-placeholder { width: 50px; height: 50px; flex-basis: 50px; }
   .controls { gap: 2px; }
   .controls button { width: 31px; height: 31px; font-size: 15px; }
   .controls .play-button { width: 42px; height: 42px; }
   .timeline { display: none; }
-  .player-bar.expanded { left: 0; top: 0; height: calc(100vh - 58px); padding: 52px 20px 28px; }
+  .player-bar.expanded { left: 0; bottom: calc(58px + env(safe-area-inset-bottom)); height: calc(100vh - 58px - env(safe-area-inset-bottom)); padding: 52px 20px 28px; }
   .expanded .track-summary img, .expanded .cover-placeholder { width: 72vw; height: 72vw; max-width: 290px; max-height: 290px; }
   .expanded .timeline { display: flex; width: 100%; max-width: 430px; }
   .back-button { top: 18px; left: 18px; }

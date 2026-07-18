@@ -6,7 +6,16 @@
         <p>{{ recentOnly ? '最近播放' : '点歌' }}</p>
         <h1>{{ recentOnly ? '最近播放' : '想听什么？' }}</h1>
         <span v-if="!recentOnly">在顶部搜索框中搜索歌曲、歌手或专辑。</span>
-        <label v-if="bots.length" class="bot-select">控制机器人<select v-model="botId" @change="selectBot"><option v-for="bot in bots" :key="bot.id" :value="bot.id">{{ bot.name }} · {{ statusText(bot.status) }}</option></select></label>
+        <label v-if="bots.length" class="bot-select">
+          <span class="bot-select-label">控制机器人</span>
+          <span class="bot-select-control">
+            <i class="bot-select-icon">♫</i>
+            <select v-model="botId" aria-label="选择控制机器人" @change="selectBot">
+              <option v-for="bot in bots" :key="bot.id" :value="bot.id">{{ bot.name }} · {{ statusText(bot.status) }}</option>
+            </select>
+            <i class="bot-select-chevron">⌄</i>
+          </span>
+        </label>
       </header>
       <p v-if="error" class="error">{{ error }}</p>
 
@@ -104,16 +113,22 @@ export default Vue.extend({
 <style scoped lang="less">
 .music { max-width: 1050px; margin: auto; padding: 44px; }
 .music header p { color: #287f74; font-weight: bold; }
-.bot-select { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; color: #536572; font-size: 13px; }
-.bot-select select { width: auto; min-width: 180px; height: 34px; margin: 0; }
+.bot-select { display: inline-flex; align-items: center; gap: 12px; margin-top: 16px; color: #536572; font-size: 13px; }
+.bot-select-label { color: #667684; font-weight: 600; white-space: nowrap; }
+.bot-select-control { position: relative; display: flex; align-items: center; min-width: 250px; }
+.bot-select-icon { position: absolute; z-index: 1; left: 11px; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 8px; background: #e4f5f1; color: #287f74; font-size: 14px; font-style: normal; pointer-events: none; }
+.bot-select select { appearance: none; width: 100%; min-width: 0; height: 42px; margin: 0; padding: 0 38px 0 44px; border: 1px solid #d9e7e4; border-radius: 12px; outline: 0; background: #fff; color: var(--console-ink); font: inherit; cursor: pointer; box-shadow: 0 5px 14px rgba(50, 89, 83, .06); transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease; }
+.bot-select select:hover { border-color: #a9d9d0; background: #fbfefd; }
+.bot-select select:focus { border-color: #4fb8a8; box-shadow: 0 0 0 3px rgba(79, 184, 168, .14), 0 5px 14px rgba(50, 89, 83, .06); }
+.bot-select-chevron { position: absolute; right: 13px; color: #70828b; font-size: 17px; font-style: normal; line-height: 1; pointer-events: none; transform: translateY(-2px); }
 .music h1 { font-size: 32px; }
 .music section { margin-top: 34px; }
 .music article { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 8px; }
 .music article:hover { background: #edf7f5; }
-.music img, .music i { width: 46px; height: 46px; border-radius: 7px; object-fit: cover; background: #dff1ed; display: grid; place-items: center; font-style: normal; }
+.music article img, .music article i { width: 46px; height: 46px; border-radius: 7px; object-fit: cover; background: #dff1ed; display: grid; place-items: center; font-style: normal; }
 .music article div { flex: 1; min-width: 0; }
 .music b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .music button { height: 34px; border: 0; border-radius: 6px; background: #4fb8a8; color: #fff; padding: 0 11px; cursor: pointer; }
 .error { color: #b34d57; }
-@media (max-width: 760px) { .music { padding: 28px 16px; } .bot-select { display: flex; align-items: stretch; flex-direction: column; } .bot-select select { width: 100%; } }
+@media (max-width: 760px) { .music { padding: 28px 16px; } .bot-select { display: flex; align-items: stretch; flex-direction: column; gap: 7px; margin-top: 18px; } .bot-select-control { width: 100%; min-width: 0; } .bot-select select { width: 100%; } }
 </style>
