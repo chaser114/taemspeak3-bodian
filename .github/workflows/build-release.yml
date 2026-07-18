@@ -55,24 +55,10 @@ jobs:
 
       - name: Publish Linux package
         run: |
-          dotnet restore TS3AudioBot/TS3AudioBot.csproj --runtime linux-x64 -p:SkipGitVersion=true
-          dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj --runtime linux-x64 -p:SkipGitVersion=true
-          dotnet publish TS3AudioBot/TS3AudioBot.csproj --configuration Release --runtime linux-x64 --self-contained true -p:SkipGitVersion=true --no-restore --output artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64
-          mkdir -p artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/plugins
-          mkdir -p artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/WebInterface
-          cp KuwoMusicPlugin/bin/Release/net6.0/KuwoMusicPlugin.dll artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/plugins/
-          cp -a WebInterface/dist/. artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/WebInterface/
-          cp packaging/linux/start.sh packaging/linux/install-linux.sh packaging/linux/README.md artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/
-          mkdir -p artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/run
-          cp run/start-linux.sh artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/run/
-          chmod +x artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/TS3AudioBot artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/start.sh artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/install-linux.sh artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/run/start-linux.sh
-          test -x artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/TS3AudioBot
-          test -x artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/run/start-linux.sh
-          test -s artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/plugins/KuwoMusicPlugin.dll
-          test -s artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/WebInterface/index.html
-          test -s artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/WebInterface/bundle.js
-          grep -Fq "bot-select-icon" artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/WebInterface/bundle.js
-          tar -C artifacts/linux -czf artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz TS3AudioBot-KuwoPlugin-linux-x64
+          chmod +x run/build-linux-package.sh
+          ./run/build-linux-package.sh artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64
+          mkdir -p artifacts
+          mv artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
 
       - name: Publish Windows package
         run: |
