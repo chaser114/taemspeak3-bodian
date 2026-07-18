@@ -77,25 +77,42 @@ namespace TS3AudioBot.Web
 			var webData = config.Interface;
 			if (string.IsNullOrEmpty(webData.Path))
 			{
+				// A published bot owns the WebInterface beside its assembly. Prefer it
+				// over a stale directory inherited from the process working directory.
+				var asmPath = Path.GetDirectoryName(typeof(Core).Assembly.Location)!;
+				var asmWebPath = Path.GetFullPath(Path.Combine(asmPath, "WebInterface"));
+				if (HasWebEntryPoint(asmWebPath))
+					return asmWebPath;
+
 				for (int i = 0; i < 5; i++)
 				{
 					var up = Path.Combine(Enumerable.Repeat("..", i).ToArray());
 					var checkDir = Path.Combine(up, "WebInterface");
-					if (Directory.Exists(checkDir))
+					if (HasWebEntryPoint(checkDir))
 						return Path.GetFullPath(checkDir);
 				}
-
-				var asmPath = Path.GetDirectoryName(typeof(Core).Assembly.Location)!;
-				var asmWebPath = Path.GetFullPath(Path.Combine(asmPath, "WebInterface"));
-				if (Directory.Exists(asmWebPath))
-					return asmWebPath;
 			}
-			else if (Directory.Exists(webData.Path))
+			else if (HasWebEntryPoint(webData.Path))
 			{
 				return Path.GetFullPath(webData.Path);
 			}
 
 			return null;
+		}
+
+		private static bool HasWebEntryPoint(string path)
+		{
+			return Directory.Exists(path) && File.Exists(Path.Combine(path, "index.html"));
+		}
+
+		private static bool IsNoCacheWebRequest(PathString path)
+		{
+			var value = path.Value;
+			return string.IsNullOrEmpty(value)
+				|| value == "/"
+				|| value.Equals("/index.html", StringComparison.OrdinalIgnoreCase)
+				|| value.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
+				|| value.EndsWith(".css", StringComparison.OrdinalIgnoreCase);
 		}
 
 		private void StartWebServerInternal()
@@ -115,9 +132,19 @@ namespace TS3AudioBot.Web
 					kestrel.Limits.MaxRequestBodySize = 3_000_000; // 3 MiB should be enough
 				})
 				.ConfigureServices(_ => { })
-				.Configure(app =>
+			.Configure(app =>
+			{
+				if (config.Interface.Enabled)
 				{
-					app.Map(new PathString("/console-api"), map => map.Run(HandleConsoleApi));
+					app.Use(async (ctx, next) =>
+					{
+						if (IsNoCacheWebRequest(ctx.Request.Path))
+							ctx.Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+						await next();
+					});
+				}
+
+				app.Map(new PathString("/console-api"), map => map.Run(HandleConsoleApi));
 					app.Use(async (ctx, next) =>
 					{
 						await next();
@@ -161,6 +188,7 @@ namespace TS3AudioBot.Web
 				}
 				else
 				{
+					Log.Info("Hosting WebInterface from {0}", baseDir);
 					host.UseWebRoot(baseDir);
 				}
 			}
