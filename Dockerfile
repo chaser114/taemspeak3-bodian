@@ -7,7 +7,13 @@ RUN dotnet restore TS3AudioBot/TS3AudioBot.csproj --runtime linux-x64 -p:SkipGit
     && dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj --runtime linux-x64 -p:SkipGitVersion=true \
     && dotnet build KuwoMusicPlugin/KuwoMusicPlugin.csproj -c Release -p:SkipGitVersion=true --no-restore \
     && dotnet publish TS3AudioBot/TS3AudioBot.csproj -c Release -r linux-x64 -p:SkipGitVersion=true --self-contained true --no-restore -o /app
-RUN mkdir -p /app/plugins /app/WebInterface && cp KuwoMusicPlugin/bin/Release/net6.0/KuwoMusicPlugin.dll /app/plugins/ && cp -a WebInterface/dist/. /app/WebInterface/
+RUN mkdir -p /app/plugins /app/WebInterface \
+    && cp KuwoMusicPlugin/bin/Release/net6.0/KuwoMusicPlugin.dll /app/plugins/ \
+    && cp -a WebInterface/dist/. /app/WebInterface/ \
+    && test -s /app/plugins/KuwoMusicPlugin.dll \
+    && test -s /app/WebInterface/index.html \
+    && test -s /app/WebInterface/bundle.js \
+    && grep -Fq "bot-select-icon" /app/WebInterface/bundle.js
 FROM debian:12-slim
 RUN apt-get update && apt-get install -y ffmpeg libopus0 ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app /app

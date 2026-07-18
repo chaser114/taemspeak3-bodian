@@ -1,24 +1,10 @@
-#r "nuget: SharpZipLib, 1.2.0"
 #r "nuget: SimpleExec, 6.2.0"
 
-using ICSharpCode.SharpZipLib.Tar;
-using ICSharpCode.SharpZipLib.GZip;
 using static SimpleExec.Command;
 
-using (var fs = File.Open("TS3AudioBot.tar", FileMode.Create, FileAccess.Write))
-using (var tar = TarArchive.CreateOutputTarArchive(fs))
-using (var read = File.OpenRead("TS3AudioBot"))
-{
-	var entry = TarEntry.CreateEntryFromFile("TS3AudioBot");
-	entry.TarHeader.Mode = Convert.ToInt32("0755", 8);
-	tar.WriteEntry(entry, false);
-}
+// Keep the historical entry point, but delegate to the canonical Linux builder.
+// This avoids maintaining a second archive manifest that can omit the plugin or web assets.
+if (!File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "run", "build-linux-package.sh")))
+	throw new FileNotFoundException("Run this script from the repository root.");
 
-Run("tar", "-rf TS3AudioBot.tar WebInterface");
-
-using (var fs = File.Open("TS3AudioBot.tar.gz", FileMode.Create, FileAccess.Write))
-using (var gz = new GZipOutputStream(fs))
-using (var read = File.OpenRead("TS3AudioBot.tar"))
-{
-	read.CopyTo(gz);
-}
+Run("sh", "run/build-linux-package.sh");

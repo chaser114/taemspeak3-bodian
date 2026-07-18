@@ -1,39 +1,21 @@
 # Linux 部署说明
 
-本项目的 Linux 发布包目标为 `linux-x64`，适用于 64 位 x86 Linux 服务器。
-
-## 安装系统依赖
-
-Debian / Ubuntu：
+请使用带网页端的 `TS3AudioBot-KuwoPlugin-linux-x64.tar.gz`，不要使用旧的
+`TS3AudioBot-Kuwo-linux-x64.tar.gz`。
 
 ```bash
-sudo apt update
-sudo apt install -y ffmpeg libopus0
+tar -xzf TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
+cd TS3AudioBot-KuwoPlugin-linux-x64
+chmod +x run/start-linux.sh
+./run/start-linux.sh
 ```
 
-CentOS / Rocky / AlmaLinux：
+发布包包含 `plugins/KuwoMusicPlugin.dll`、`WebInterface` 和启动脚本。启动后
+访问 `http://服务器IP:58913` 完成首次网页配置。
+
+从源码构建 Linux 包：
 
 ```bash
-sudo dnf install -y ffmpeg opus
+chmod +x run/build-linux-package.sh
+./run/build-linux-package.sh
 ```
-
-## 启动
-
-```bash
-tar -xzf TS3AudioBot-Kuwo-linux-x64.tar.gz
-cd TS3AudioBot-Kuwo-linux-x64
-chmod +x TS3AudioBot
-./TS3AudioBot
-```
-
-首次运行会创建配置文件并要求完成 TeamSpeak 连接设置。此发布包是自包含版本，不需要另外安装 .NET。
-
-点歌命令：
-
-```text
-!search 稻香
-!play 1
-!play 稻香
-```
-
-`!play` 不支持普通链接播放；它只用于酷我 API 点歌或选择上一次的搜索结果。

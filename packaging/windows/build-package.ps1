@@ -26,10 +26,10 @@ if ($LASTEXITCODE -ne 0) { throw "Windows runtime restore failed." }
 & $dotnet restore (Join-Path $projectRoot "KuwoMusicPlugin\KuwoMusicPlugin.csproj") --runtime win-x64 -p:SkipGitVersion=true
 if ($LASTEXITCODE -ne 0) { throw "Plugin runtime restore failed." }
 
-& $dotnet build (Join-Path $projectRoot "KuwoMusicPlugin\KuwoMusicPlugin.csproj") -c Release --no-restore
+& $dotnet build (Join-Path $projectRoot "KuwoMusicPlugin\KuwoMusicPlugin.csproj") -c Release -p:SkipGitVersion=true --no-restore
 if ($LASTEXITCODE -ne 0) { throw "Kuwo plugin build failed." }
 
-& $dotnet publish (Join-Path $projectRoot "TS3AudioBot\TS3AudioBot.csproj") -c Release -r win-x64 --self-contained true --no-restore -o $outputPath
+& $dotnet publish (Join-Path $projectRoot "TS3AudioBot\TS3AudioBot.csproj") -c Release -r win-x64 -p:SkipGitVersion=true --self-contained true --no-restore -o $outputPath
 if ($LASTEXITCODE -ne 0) { throw "Windows publish failed." }
 
 $pluginOutput = Join-Path $projectRoot "KuwoMusicPlugin\bin\Release\net6.0\KuwoMusicPlugin.dll"

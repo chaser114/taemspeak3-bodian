@@ -101,17 +101,31 @@ powershell -ExecutionPolicy Bypass -File .\packaging\windows\build-package.ps1
 
 或者双击 `run/build-windows-package.ps1`。脚本会构建网页端、机器人、酷我插件并生成可直接运行的 Windows x64 包。
 
+Linux 下可以在仓库根目录执行：
+
+```bash
+chmod +x run/build-linux-package.sh
+./run/build-linux-package.sh
+```
+
+脚本会在 `dist/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz` 生成带网页端的自包含 Linux x64 包，
+并在打包前校验 `WebInterface/bundle.js`、`plugins/KuwoMusicPlugin.dll`、主程序和 Linux 启动脚本。
+Linux 构建会显式使用 `--runtime linux-x64` 和 `-p:SkipGitVersion=true`，不会再安装不兼容 .NET 6 的
+`dotnet-script` 或 `GitVersion.Tool`。
+
 手动构建代码：
 
 ```bash
-dotnet restore TS3AudioBot/TS3AudioBot.csproj
-dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj
-dotnet build -c Release TS3AudioBot/TS3AudioBot.csproj --no-restore
-dotnet build -c Release KuwoMusicPlugin/KuwoMusicPlugin.csproj --no-restore
+dotnet restore TS3AudioBot/TS3AudioBot.csproj --runtime linux-x64 -p:SkipGitVersion=true
+dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj --runtime linux-x64 -p:SkipGitVersion=true
+dotnet build -c Release TS3AudioBot/TS3AudioBot.csproj -p:SkipGitVersion=true --no-restore
+dotnet build -c Release KuwoMusicPlugin/KuwoMusicPlugin.csproj -p:SkipGitVersion=true --no-restore
 cd WebInterface
 NODE_OPTIONS=--openssl-legacy-provider npm ci
 NODE_OPTIONS=--openssl-legacy-provider npm run build
 ```
+
+上面的手动命令是 Linux 构建参数；需要完整压缩包时请直接使用 `run/build-linux-package.sh`。
 
 ## 部署入口位置
 
