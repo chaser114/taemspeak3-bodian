@@ -20,6 +20,12 @@ $env:NODE_OPTIONS = "--openssl-legacy-provider"
 Push-Location (Join-Path $projectRoot "WebInterface")
 try { & npm.cmd run build; if ($LASTEXITCODE -ne 0) { throw "Web build failed." } } finally { Pop-Location }
 
+& $dotnet restore (Join-Path $projectRoot "TS3AudioBot\TS3AudioBot.csproj") --runtime win-x64 -p:SkipGitVersion=true
+if ($LASTEXITCODE -ne 0) { throw "Windows runtime restore failed." }
+
+& $dotnet restore (Join-Path $projectRoot "KuwoMusicPlugin\KuwoMusicPlugin.csproj") --runtime win-x64 -p:SkipGitVersion=true
+if ($LASTEXITCODE -ne 0) { throw "Plugin runtime restore failed." }
+
 & $dotnet build (Join-Path $projectRoot "KuwoMusicPlugin\KuwoMusicPlugin.csproj") -c Release --no-restore
 if ($LASTEXITCODE -ne 0) { throw "Kuwo plugin build failed." }
 
