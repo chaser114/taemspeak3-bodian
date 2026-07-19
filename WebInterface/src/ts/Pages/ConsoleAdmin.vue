@@ -3,6 +3,21 @@
     <header><p>控制台</p><h1>管理机器人与账号</h1></header>
     <p v-if="error" class="error">{{ error }}</p>
 
+    <section class="update-card" :class="{ highlight: hasUpdate }">
+      <div class="update-copy">
+        <h2>程序更新</h2>
+        <p>
+          当前版本 <b>{{ displayVersion }}</b>
+          <template v-if="hasUpdate"> · 发现新版本 <b class="newer">{{ latestVersion }}</b></template>
+          <template v-else> · 已是最新或待检查</template>
+        </p>
+      </div>
+      <button type="button" :class="{ glow: hasUpdate }" @click="updateOpen = true">
+        {{ hasUpdate ? '立即更新' : '检查更新' }}
+      </button>
+    </section>
+    <UpdatePanel :open="updateOpen" @close="updateOpen = false" @applied="onUpdateApplied"/>
+
     <div class="grid">
       <section class="brand-card">
         <h2>站点名称</h2>
@@ -67,29 +82,53 @@
 <script lang="ts">
 import Vue from "vue";
 import { consoleApi, ConsoleUser } from "../ConsoleApi";
+import UpdatePanel from "../Components/UpdatePanel.vue";
 
 interface Bot { id: string; name: string; address: string; status: string; }
 interface Account { username: string; role: string; enabled: boolean; }
 
 export default Vue.extend({
+  components: { UpdatePanel },
   data() {
     return {
       brandName: "波点音乐", bots: [] as Bot[], accounts: [] as Account[], error: "",
       newAddress: "", newNickname: "波点音乐", newPassword: "",
       username: "", userPassword: "", role: "user",
       editing: null as Bot | null, editAddress: "", editNickname: "", editPassword: "",
+      updateOpen: false, currentVersion: "", latestVersion: "", hasUpdate: false,
     };
+  },
+  computed: {
+    displayVersion(): string {
+      const v = this.currentVersion || "unknown";
+      return v.startsWith("v") || v.startsWith("build") ? v : ("v" + v);
+    },
   },
   async created() {
     const user = await consoleApi<ConsoleUser>("me");
     if (user.role !== "admin") { this.$router.replace("/music"); return; }
     this.brandName = user.brandName;
     await this.reload();
+    await this.refreshUpdate();
   },
   methods: {
     async reload() {
       this.bots = (await consoleApi<{ bots: Bot[] }>("bots")).bots;
       this.accounts = (await consoleApi<{ accounts: Account[] }>("accounts")).accounts;
+    },
+    async refreshUpdate() {
+      try {
+        const status = await consoleApi<{ currentVersion?: string }>("update/status");
+        this.currentVersion = status.currentVersion || "";
+        const check = await consoleApi<{ hasUpdate?: boolean; currentVersion?: string; latestVersion?: string }>("update/check", { source: "gitee" });
+        if (check.currentVersion) this.currentVersion = check.currentVersion;
+        this.latestVersion = check.latestVersion || "";
+        this.hasUpdate = !!check.hasUpdate;
+      } catch (_) { /* ignore */ }
+    },
+    onUpdateApplied() {
+      this.hasUpdate = false;
+      this.refreshUpdate();
     },
     statusText(status: string) { return status === "connected" ? "已连接" : status === "connecting" ? "连接中" : "离线"; },
     async run(action: () => Promise<any>) {
@@ -136,7 +175,21 @@ export default Vue.extend({
 .admin { max-width: 1120px; margin: auto; padding: 42px; }
 .admin > header p { margin: 0 0 5px; color: #287f74; font-weight: bold; }
 .admin h1 { margin: 0; font-size: 32px; }
-.grid { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(0, 1.8fr); grid-template-rows: auto auto auto; gap: 20px; margin-top: 28px; align-items: start; }
+.update-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-top: 22px; padding: 18px 20px; border: 1px solid #dfe6e8; border-radius: 10px; background: #fff;
+}
+.update-card.highlight { border-color: #f0d48a; background: #fffaf0; }
+.update-copy h2 { margin: 0; font-size: 17px; }
+.update-copy p { margin: 6px 0 0; color: #778595; font-size: 13px; }
+.update-copy b { color: var(--console-ink); }
+.update-copy b.newer { color: #9a6b00; }
+.update-card button {
+  height: 38px; padding: 0 14px; border: 0; border-radius: 8px; background: #4fb8a8; color: #fff;
+  cursor: pointer; font: inherit; white-space: nowrap;
+}
+.update-card button.glow { background: #d4a017; box-shadow: 0 6px 16px rgba(212, 160, 23, 0.28); }
+.grid { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(0, 1.8fr); grid-template-rows: auto auto auto; gap: 20px; margin-top: 20px; align-items: start; }
 .grid section { min-width: 0; padding: 22px; border: 1px solid #dfe6e8; border-radius: 10px; background: #fff; }
 .brand-card { grid-column-start: 1; grid-column-end: 2; grid-row: 1; }
 .new-bot-card { grid-column-start: 1; grid-column-end: 2; grid-row: 2; }
@@ -171,5 +224,11 @@ article small { margin-top: 4px; color: #778595; font-size: 12px; }
 .modal-actions button { margin: 0; }
 .secondary { background: #edf1f2; color: #4c5d69; }
 @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; grid-template-rows: none; } .brand-card, .new-bot-card, .bots-card, .accounts-card { grid-column-start: auto; grid-column-end: auto; grid-row: auto; } .create-account { grid-template-columns: 1fr; } .admin { padding: 28px 16px; } }
-@media (max-width: 600px) { .admin h1 { font-size: 27px; } .bots-card article { align-items: flex-start; flex-wrap: wrap; } .status { margin-left: auto; } }
+@media (max-width: 600px) {
+  .admin h1 { font-size: 27px; }
+  .update-card { align-items: stretch; flex-direction: column; }
+  .update-card button { width: 100%; }
+  .bots-card article { align-items: flex-start; flex-wrap: wrap; }
+  .status { margin-left: auto; }
+}
 </style>

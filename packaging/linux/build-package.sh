@@ -84,6 +84,11 @@ test -s "$output_dir/WebInterface/bundle.js"
 test -s "$output_dir/packaging/common/update-in-place.sh"
 grep -Fq "bot-select-icon" "$output_dir/WebInterface/bundle.js"
 
+# Local builds get a timestamp version; CI overwrites with build-N.
+if [ ! -f "$output_dir/VERSION" ]; then
+	printf 'local-%s\n' "$(date +%Y%m%d%H%M%S)" > "$output_dir/VERSION"
+fi
+
 archive="$output_dir.tar.gz"
 rm -f "$archive"
 tar -C "$(dirname -- "$output_dir")" -czf "$archive" "$(basename -- "$output_dir")"

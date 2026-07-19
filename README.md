@@ -70,6 +70,26 @@ start-web-console.bat
 
 **Docker** 继续使用挂载的 `data/` 卷，`docker compose up -d --build` 重建镜像即可，不要删 `data/`。
 
+### 网页一键更新（管理员）
+
+管理员登录后：
+
+- **电脑端**：左侧栏底部显示版本号；有更新时会 **变黄**，点开即可升级  
+- **手机端**：进入 **管理** 页，顶部「程序更新」卡片同样可检查/升级  
+
+升级弹层支持选择：
+
+- **Gitee 更新（国内服务器）**（默认）  
+- **GitHub 更新（官方源）**  
+
+确认时需再输入一次管理员密码。更新只替换程序文件，**不会覆盖 `data/`**。  
+
+说明：
+
+- 发布包需同步到 **Gitee Releases**（仓库建议：`chaser114/taemspeak3-bodian`）后，国内源才可用  
+- **Docker 部署**请继续用 `docker compose up -d --build`，网页升级需要可写的安装目录，容器镜像层通常不适用  
+- 包内 `VERSION` 文件记录当前 `build-N` 版本号
+
 ## 下载
 
 在 GitHub 的 [Releases](../../releases) 页面下载带版本号的构建包：

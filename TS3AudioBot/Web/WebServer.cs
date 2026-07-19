@@ -37,9 +37,10 @@ namespace TS3AudioBot.Web
 		private readonly BotManager botManager;
 		private readonly WebConsoleService console;
 		private readonly ConfRoot rootConfig;
+		private readonly WebUpdateService webUpdate;
 		private Api.WebApi? api;
 
-		public WebServer(ConfWeb config, CoreInjector coreInjector, WebAccountService webAccounts, BotManager botManager, WebConsoleService console, ConfRoot rootConfig)
+		public WebServer(ConfWeb config, CoreInjector coreInjector, WebAccountService webAccounts, BotManager botManager, WebConsoleService console, ConfRoot rootConfig, WebUpdateService webUpdate)
 		{
 			this.config = config;
 			this.coreInjector = coreInjector;
@@ -47,6 +48,7 @@ namespace TS3AudioBot.Web
 			this.botManager = botManager;
 			this.console = console;
 			this.rootConfig = rootConfig;
+			this.webUpdate = webUpdate;
 		}
 
 		// TODO write server to be reload-able
@@ -259,6 +261,48 @@ namespace TS3AudioBot.Web
 			var account = webAccounts.GetAccount(ctx.Request.Cookies["ts3ab_session"]);
 			if (account is null) { await WriteError(ctx, "请先登录。", StatusCodes.Status401Unauthorized); return; }
 			if (path == "me") { await WriteJson(ctx, new { username = account.Username, role = account.Role.ToString().ToLowerInvariant(), brandName = webAccounts.BrandName }); return; }
+			if (path == "update/status")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可查看更新状态。", StatusCodes.Status403Forbidden); return; }
+				await WriteJson(ctx, webUpdate.GetStatus()); return;
+			}
+			if (path == "update/check" && ctx.Request.Method == "POST")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可检查更新。", StatusCodes.Status403Forbidden); return; }
+				try
+				{
+					var body = await ReadJson(ctx);
+					await WriteJson(ctx, await webUpdate.CheckAsync(body.Value<string>("source")));
+				}
+				catch (Exception ex)
+				{
+					Log.Warn(ex, "Console update check failed.");
+					await WriteError(ctx, "检查更新失败：" + ex.Message, StatusCodes.Status422UnprocessableEntity);
+				}
+				return;
+			}
+			if (path == "update/apply" && ctx.Request.Method == "POST")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可执行更新。", StatusCodes.Status403Forbidden); return; }
+				try
+				{
+					var body = await ReadJson(ctx);
+					var password = body.Value<string>("password") ?? string.Empty;
+					if (!webAccounts.VerifyCredentials(account.Username, password))
+					{
+						await WriteError(ctx, "管理员密码不正确。", StatusCodes.Status401Unauthorized);
+						return;
+					}
+					var source = body.Value<string>("source") ?? "gitee";
+					await WriteJson(ctx, await webUpdate.ApplyAsync(source, "ok"));
+				}
+				catch (Exception ex)
+				{
+					Log.Warn(ex, "Console update apply failed.");
+					await WriteError(ctx, "更新失败：" + ex.Message, StatusCodes.Status422UnprocessableEntity);
+				}
+				return;
+			}
 			if (path == "bots")
 			{
 				var active = botManager.GetBotInfolist()

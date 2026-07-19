@@ -132,6 +132,17 @@ namespace TS3AudioBot.Web
 			}
 		}
 
+		public bool VerifyCredentials(string username, string password)
+		{
+			username = username?.Trim() ?? string.Empty;
+			lock (sync)
+			{
+				var account = accounts.FindById(username);
+				if (account is null || !account.Enabled) return false;
+				return Verify(password, account);
+			}
+		}
+
 		private static byte[] Hash(string password, byte[] salt) => new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256).GetBytes(32);
 		private static bool Verify(string password, WebAccount account) => CryptographicOperations.FixedTimeEquals(Hash(password, Convert.FromBase64String(account.Salt)), Convert.FromBase64String(account.PasswordHash));
 		private static string ToBase64Url(byte[] value) => Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');

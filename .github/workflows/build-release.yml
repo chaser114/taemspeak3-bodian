@@ -57,6 +57,9 @@ jobs:
         run: |
           chmod +x run/build-linux-package.sh
           ./run/build-linux-package.sh artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64
+          printf 'build-%s\n' "${{ github.run_number }}" > artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/VERSION
+          rm -f artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
+          tar -C artifacts/linux -czf artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz TS3AudioBot-KuwoPlugin-linux-x64
           mkdir -p artifacts
           mv artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
 
@@ -80,6 +83,7 @@ jobs:
           cp run/update-windows.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/
           cp packaging/common/prepare-data.ps1 packaging/common/update-in-place.ps1 artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/packaging/common/
           printf '%s\n' "This folder stores bots, web accounts and rights. Keep it when upgrading." > artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/data/README.txt
+          printf 'build-%s\n' "${{ github.run_number }}" > artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/VERSION
           cd artifacts/windows && zip -qr ../TS3AudioBot-KuwoPlugin-windows-x64.zip TS3AudioBot-KuwoPlugin-windows-x64
 
       - name: Upload workflow artifacts

@@ -52,5 +52,10 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\common\update-in-place
 $dataDir = Join-Path $outputPath "data"
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 Set-Content -LiteralPath (Join-Path $dataDir "README.txt") -Value "This folder stores bots, web accounts and rights. Keep it when upgrading." -Encoding UTF8
+# Local builds get a timestamp version; CI overwrites with build-N.
+$versionPath = Join-Path $outputPath "VERSION"
+if (-not (Test-Path -LiteralPath $versionPath)) {
+	Set-Content -LiteralPath $versionPath -Value ("local-" + (Get-Date -Format "yyyyMMddHHmmss")) -Encoding UTF8
+}
 
 Write-Host "Windows package created: $outputPath"
