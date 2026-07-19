@@ -68,16 +68,18 @@ cp "$repo/packaging/common/prepare-data.sh" "$output_dir/packaging/common/prepar
 cp "$repo/packaging/common/update-in-place.sh" "$output_dir/packaging/common/update-in-place.sh"
 cp "$repo/run/start-linux.sh" "$output_dir/run/start-linux.sh"
 cp "$repo/run/update-linux.sh" "$output_dir/run/update-linux.sh"
+cp "$repo/run/stop-linux.sh" "$output_dir/run/stop-linux.sh"
 # Empty data placeholder so users see the durable data directory in the package.
 mkdir -p "$output_dir/data"
 printf '%s\n' "This folder stores bots, web accounts and rights. Keep it when upgrading." > "$output_dir/data/README.txt"
 
 chmod +x "$output_dir/TS3AudioBot" "$output_dir/start.sh" "$output_dir/install-linux.sh" \
-	"$output_dir/run/start-linux.sh" "$output_dir/run/update-linux.sh" \
+	"$output_dir/run/start-linux.sh" "$output_dir/run/update-linux.sh" "$output_dir/run/stop-linux.sh" \
 	"$output_dir/packaging/common/prepare-data.sh" "$output_dir/packaging/common/update-in-place.sh"
 test -x "$output_dir/TS3AudioBot"
 test -x "$output_dir/run/start-linux.sh"
 test -x "$output_dir/run/update-linux.sh"
+test -x "$output_dir/run/stop-linux.sh"
 test -s "$output_dir/plugins/KuwoMusicPlugin.dll"
 test -s "$output_dir/WebInterface/index.html"
 test -s "$output_dir/WebInterface/bundle.js"

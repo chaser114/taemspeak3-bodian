@@ -28,5 +28,6 @@ if exist "%~dp0packaging\common\prepare-data.ps1" (
 )
 
 rem Run with CWD=data so relative bots_path / db paths stay under data/.
+rem Write pid so stop.bat / web-update restarts can cleanly stop this instance.
 cd /d "%~dp0data"
-"%~dp0TS3AudioBot.exe" --config ts3audiobot.toml --non-interactive %*
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$p=Start-Process -FilePath '%~dp0TS3AudioBot.exe' -ArgumentList '--config','ts3audiobot.toml','--non-interactive' -WorkingDirectory '%~dp0data' -NoNewWindow -PassThru; Set-Content -LiteralPath '%~dp0ts3audiobot.pid' -Value $p.Id -Encoding ASCII; Wait-Process -Id $p.Id; Remove-Item -LiteralPath '%~dp0ts3audiobot.pid' -Force -ErrorAction SilentlyContinue"

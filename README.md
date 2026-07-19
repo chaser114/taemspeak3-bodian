@@ -84,6 +84,12 @@ start-web-console.bat
 
 确认时需再输入一次管理员密码。更新只替换程序文件，**不会覆盖 `data/`**。  
 
+更新后会**自动重启**（手机也能继续用网页）。运维方式对齐常见面板软件：
+
+- **管理页 → 服务与日志**：在线查看后台日志，支持**重启 / 停止**（需管理员密码）  
+- 日志文件：`logs/console.log` + `data/logs/`  
+- 服务器脚本备选：Windows `stop.bat`，Linux `./run/stop-linux.sh`  
+
 说明：
 
 - **构建只在 GitHub Actions**；Gitee 只作源码镜像 + 国内下载源（Releases）  

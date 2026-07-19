@@ -89,8 +89,9 @@ jobs:
           mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/run
           mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/packaging/common
           mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/data
-          cp run/start-web-console.bat run/update-windows.ps1 run/update-windows.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/run/
+          cp run/start-web-console.bat run/update-windows.ps1 run/update-windows.bat run/stop-windows.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/run/
           cp run/update-windows.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/
+          cp run/stop-windows.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/stop.bat
           cp packaging/common/prepare-data.ps1 packaging/common/update-in-place.ps1 artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/packaging/common/
           printf '%s\n' "This folder stores bots, web accounts and rights. Keep it when upgrading." > artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/data/README.txt
           printf 'build-%s\n' "${{ github.run_number }}" > artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/VERSION

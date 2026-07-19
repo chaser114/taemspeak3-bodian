@@ -19,5 +19,13 @@ fi
 
 chmod +x ./TS3AudioBot
 # Run with CWD=data so relative bots_path / db paths stay under data/.
+# Record PID for stop scripts / web-update restarts; keep foreground so Ctrl+C works.
 cd data
-exec ../TS3AudioBot --config ts3audiobot.toml --non-interactive "$@"
+../TS3AudioBot --config ts3audiobot.toml --non-interactive "$@" &
+pid=$!
+echo "$pid" > ../ts3audiobot.pid
+trap 'rm -f ../ts3audiobot.pid; kill $pid 2>/dev/null || true' INT TERM EXIT
+wait "$pid"
+status=$?
+rm -f ../ts3audiobot.pid
+exit "$status"

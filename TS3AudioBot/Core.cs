@@ -73,6 +73,7 @@ namespace TS3AudioBot
 			builder.RequestModule<PluginManager>();
 			builder.RequestModule<WebAccountService>();
 			builder.RequestModule<WebUpdateService>();
+			builder.RequestModule<WebProcessService>();
 			builder.RequestModule<RightsManager>();
 			builder.RequestModule<BotManager>();
 			builder.RequestModule<WebConsoleService>();

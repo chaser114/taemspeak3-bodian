@@ -140,11 +140,10 @@ export default Vue.extend({
           source: this.source,
           password: this.password,
         });
-        this.message = result.message || "更新已开始，程序即将重启，请稍候刷新页面。";
+        this.message = result.message || "更新已开始，程序会自动重启。约 10～20 秒后刷新网页。日志：logs/console.log；停止：stop 脚本。";
         this.$emit("applied");
-        setTimeout(() => {
-          window.location.reload();
-        }, 8000);
+        // Give the bot time to exit, replace files and come back.
+        setTimeout(() => { window.location.reload(); }, 15000);
       } catch (e) {
         this.error = e instanceof Error ? e.message : "更新失败。";
       } finally {

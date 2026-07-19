@@ -165,11 +165,13 @@ namespace TS3AudioBot.Web
 				return new
 				{
 					ok = true,
-					message = "更新已开始，程序即将重启，请稍候刷新页面。",
+					message = "更新已开始，程序会自动重启。约 10～20 秒后刷新网页即可。日志：logs/console.log 与 data/logs/；停止：stop.bat 或 ./run/stop-linux.sh。",
 					from = CurrentVersion,
 					to = release.Tag,
 					source,
 					backup = backupDir,
+					restart = "auto",
+					logFile = "logs/console.log",
 				};
 			}
 			finally
@@ -319,6 +321,8 @@ namespace TS3AudioBot.Web
 
 		private string WriteApplyScript(string packageRoot, string installRoot, string platform)
 		{
+			// Auto-restart so mobile web updates can reconnect without SSH.
+			// Console output goes to logs/console.log; PID to ts3audiobot.pid for stop scripts.
 			if (platform == "windows")
 			{
 				var script = Path.Combine(installRoot, ".update-apply.ps1");
@@ -327,7 +331,17 @@ $ErrorActionPreference = 'Stop'
 Start-Sleep -Seconds 2
 $src = '{EscapePs(packageRoot)}'
 $dst = '{EscapePs(installRoot)}'
-$protected = @('data','bots','ts3audiobot.toml','ts3audiobot.db','rights.toml','NLog.config','logs','backup','.update-staging','.update-apply.ps1','.update-apply.sh')
+$logDir = Join-Path $dst 'logs'
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+$log = Join-Path $logDir 'update-apply.log'
+$consoleLog = Join-Path $logDir 'console.log'
+$pidFile = Join-Path $dst 'ts3audiobot.pid'
+function Write-Log([string]$msg) {{
+  $line = ('[' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '] ' + $msg)
+  Add-Content -LiteralPath $log -Value $line
+}}
+Write-Log 'Applying package files...'
+$protected = @('data','bots','ts3audiobot.toml','ts3audiobot.db','rights.toml','NLog.config','logs','backup','.update-staging','.update-apply.ps1','.update-apply.sh','.update-done','ts3audiobot.pid')
 Get-ChildItem -LiteralPath $src -Force | ForEach-Object {{
   if ($protected -contains $_.Name) {{ return }}
   $target = Join-Path $dst $_.Name
@@ -338,24 +352,27 @@ Get-ChildItem -LiteralPath $src -Force | ForEach-Object {{
     Copy-Item -LiteralPath $_.FullName -Destination $target -Force
   }}
 }}
-# Keep VERSION at install root
 if (Test-Path -LiteralPath (Join-Path $src 'VERSION')) {{
   Copy-Item -LiteralPath (Join-Path $src 'VERSION') -Destination (Join-Path $dst 'VERSION') -Force
 }}
 $prepare = Join-Path $dst 'packaging\common\prepare-data.ps1'
 if (Test-Path -LiteralPath $prepare) {{ & $prepare -Root $dst | Out-Null }}
-$starter = Join-Path $dst 'start-web-console.bat'
-if (-not (Test-Path -LiteralPath $starter)) {{ $starter = Join-Path $dst 'start.bat' }}
-if (Test-Path -LiteralPath $starter) {{
-  Start-Process -FilePath $starter -WorkingDirectory $dst
-}} else {{
-  $exe = Join-Path $dst 'TS3AudioBot.exe'
-  if (Test-Path -LiteralPath $exe) {{
-    $data = Join-Path $dst 'data'
-    if (-not (Test-Path -LiteralPath $data)) {{ New-Item -ItemType Directory -Path $data | Out-Null }}
-    Start-Process -FilePath $exe -ArgumentList '--config','ts3audiobot.toml','--non-interactive' -WorkingDirectory $data
-  }}
+$data = Join-Path $dst 'data'
+New-Item -ItemType Directory -Force -Path $data | Out-Null
+$exe = Join-Path $dst 'TS3AudioBot.exe'
+if (-not (Test-Path -LiteralPath $exe)) {{ throw 'TS3AudioBot.exe missing after update' }}
+# Stop any leftover instance from this install before restart.
+if (Test-Path -LiteralPath $pidFile) {{
+  $oldPid = (Get-Content -LiteralPath $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+  if ($oldPid) {{ Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue }}
 }}
+Get-Process -Name 'TS3AudioBot' -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -and $_.Path.StartsWith($dst, [StringComparison]::OrdinalIgnoreCase) }} | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+Write-Log 'Starting bot (console output -> logs/console.log)...'
+$p = Start-Process -FilePath $exe -ArgumentList '--config','ts3audiobot.toml','--non-interactive' -WorkingDirectory $data -RedirectStandardOutput $consoleLog -RedirectStandardError $consoleLog -PassThru -WindowStyle Hidden
+Set-Content -LiteralPath $pidFile -Value $p.Id -Encoding ASCII
+Set-Content -LiteralPath (Join-Path $dst '.update-done') -Value ((Get-Date -Format 'o') + [Environment]::NewLine + 'pid=' + $p.Id + [Environment]::NewLine + 'log=logs/console.log') -Encoding UTF8
+Write-Log ('Bot restarted with PID ' + $p.Id)
 Remove-Item -LiteralPath (Join-Path $dst '.update-staging') -Recurse -Force -ErrorAction SilentlyContinue
 ";
 				File.WriteAllText(script, content, Encoding.UTF8);
@@ -369,28 +386,39 @@ set -eu
 sleep 2
 src='{EscapeSh(packageRoot)}'
 dst='{EscapeSh(installRoot)}'
+mkdir -p ""$dst/logs"" ""$dst/data""
+log=""$dst/logs/update-apply.log""
+console_log=""$dst/logs/console.log""
+pid_file=""$dst/ts3audiobot.pid""
+logline() {{ printf '[%s] %s\n' ""$(date '+%Y-%m-%d %H:%M:%S')"" ""$1"" >> ""$log""; }}
+logline 'Applying package files...'
 for entry in ""$src""/* ""$src""/.[!.]* ""$src""/..?*; do
   [ -e ""$entry"" ] || continue
   name=$(basename -- ""$entry"")
   case ""$name"" in
     .|..) continue ;;
-    data|bots|ts3audiobot.toml|ts3audiobot.db|rights.toml|NLog.config|logs|backup|.update-staging|.update-apply.ps1|.update-apply.sh) continue ;;
+    data|bots|ts3audiobot.toml|ts3audiobot.db|rights.toml|NLog.config|logs|backup|.update-staging|.update-apply.ps1|.update-apply.sh|.update-done|ts3audiobot.pid) continue ;;
   esac
   rm -rf ""$dst/$name""
   cp -a ""$entry"" ""$dst/$name""
 done
 if [ -f ""$src/VERSION"" ]; then cp -a ""$src/VERSION"" ""$dst/VERSION""; fi
 if [ -f ""$dst/packaging/common/prepare-data.sh"" ]; then sh ""$dst/packaging/common/prepare-data.sh"" ""$dst"" >/dev/null; fi
-cd ""$dst""
-if [ -x ""$dst/run/start-linux.sh"" ]; then
-  nohup ""$dst/run/start-linux.sh"" >/dev/null 2>&1 &
-elif [ -x ""$dst/start.sh"" ]; then
-  nohup ""$dst/start.sh"" >/dev/null 2>&1 &
-elif [ -x ""$dst/TS3AudioBot"" ]; then
-  mkdir -p ""$dst/data""
-  cd ""$dst/data""
-  nohup ""$dst/TS3AudioBot"" --config ts3audiobot.toml --non-interactive >/dev/null 2>&1 &
+if [ -f ""$pid_file"" ]; then
+  oldpid=$(cat ""$pid_file"" 2>/dev/null || true)
+  if [ -n ""${{oldpid:-}}"" ]; then kill ""$oldpid"" 2>/dev/null || true; sleep 1; kill -9 ""$oldpid"" 2>/dev/null || true; fi
 fi
+if command -v pgrep >/dev/null 2>&1; then
+  pids=$(pgrep -f ""$dst/TS3AudioBot"" 2>/dev/null || true)
+  if [ -n ""$pids"" ]; then kill $pids 2>/dev/null || true; sleep 1; kill -9 $pids 2>/dev/null || true; fi
+fi
+if [ ! -x ""$dst/TS3AudioBot"" ]; then chmod +x ""$dst/TS3AudioBot"" 2>/dev/null || true; fi
+logline 'Starting bot (console output -> logs/console.log)...'
+cd ""$dst/data""
+nohup ""$dst/TS3AudioBot"" --config ts3audiobot.toml --non-interactive >>""$console_log"" 2>&1 &
+echo $! > ""$pid_file""
+printf '%s\npid=%s\nlog=logs/console.log\n' ""$(date -Iseconds 2>/dev/null || date)"" ""$(cat ""$pid_file"")"" > ""$dst/.update-done""
+logline ""Bot restarted with PID $(cat ""$pid_file"")""
 rm -rf ""$dst/.update-staging""
 ";
 				File.WriteAllText(script, content.Replace("\r\n", "\n"), new UTF8Encoding(false));

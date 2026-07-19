@@ -30,5 +30,13 @@ else
 fi
 
 chmod +x "$repo/TS3AudioBot"
+# Record PID for stop scripts; keep process in foreground so Ctrl+C still works.
 cd "$repo/data"
-exec "$repo/TS3AudioBot" --config ts3audiobot.toml --non-interactive "$@"
+"$repo/TS3AudioBot" --config ts3audiobot.toml --non-interactive "$@" &
+pid=$!
+echo "$pid" > "$repo/ts3audiobot.pid"
+trap 'rm -f "$repo/ts3audiobot.pid"; kill $pid 2>/dev/null || true' INT TERM EXIT
+wait "$pid"
+status=$?
+rm -f "$repo/ts3audiobot.pid"
+exit "$status"

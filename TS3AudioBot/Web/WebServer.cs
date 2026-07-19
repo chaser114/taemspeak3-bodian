@@ -38,9 +38,10 @@ namespace TS3AudioBot.Web
 		private readonly WebConsoleService console;
 		private readonly ConfRoot rootConfig;
 		private readonly WebUpdateService webUpdate;
+		private readonly WebProcessService webProcess;
 		private Api.WebApi? api;
 
-		public WebServer(ConfWeb config, CoreInjector coreInjector, WebAccountService webAccounts, BotManager botManager, WebConsoleService console, ConfRoot rootConfig, WebUpdateService webUpdate)
+		public WebServer(ConfWeb config, CoreInjector coreInjector, WebAccountService webAccounts, BotManager botManager, WebConsoleService console, ConfRoot rootConfig, WebUpdateService webUpdate, WebProcessService webProcess)
 		{
 			this.config = config;
 			this.coreInjector = coreInjector;
@@ -49,6 +50,7 @@ namespace TS3AudioBot.Web
 			this.console = console;
 			this.rootConfig = rootConfig;
 			this.webUpdate = webUpdate;
+			this.webProcess = webProcess;
 		}
 
 		// TODO write server to be reload-able
@@ -300,6 +302,60 @@ namespace TS3AudioBot.Web
 				{
 					Log.Warn(ex, "Console update apply failed.");
 					await WriteError(ctx, "更新失败：" + ex.Message, StatusCodes.Status422UnprocessableEntity);
+				}
+				return;
+			}
+			if (path == "service/status")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可查看服务状态。", StatusCodes.Status403Forbidden); return; }
+				await WriteJson(ctx, webProcess.GetStatus()); return;
+			}
+			if (path == "service/logs")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可查看日志。", StatusCodes.Status403Forbidden); return; }
+				var linesText = ctx.Request.Query["lines"].ToString();
+				var lines = int.TryParse(linesText, out var n) ? n : 200;
+				await WriteJson(ctx, webProcess.GetLogs(lines, ctx.Request.Query["source"].ToString())); return;
+			}
+			if (path == "service/stop" && ctx.Request.Method == "POST")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可停止服务。", StatusCodes.Status403Forbidden); return; }
+				try
+				{
+					var body = await ReadJson(ctx);
+					var password = body.Value<string>("password") ?? string.Empty;
+					if (!webAccounts.VerifyCredentials(account.Username, password))
+					{
+						await WriteError(ctx, "管理员密码不正确。", StatusCodes.Status401Unauthorized);
+						return;
+					}
+					await WriteJson(ctx, webProcess.ScheduleStop());
+				}
+				catch (Exception ex)
+				{
+					Log.Warn(ex, "Console service stop failed.");
+					await WriteError(ctx, "停止失败：" + ex.Message, StatusCodes.Status422UnprocessableEntity);
+				}
+				return;
+			}
+			if (path == "service/restart" && ctx.Request.Method == "POST")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可重启服务。", StatusCodes.Status403Forbidden); return; }
+				try
+				{
+					var body = await ReadJson(ctx);
+					var password = body.Value<string>("password") ?? string.Empty;
+					if (!webAccounts.VerifyCredentials(account.Username, password))
+					{
+						await WriteError(ctx, "管理员密码不正确。", StatusCodes.Status401Unauthorized);
+						return;
+					}
+					await WriteJson(ctx, webProcess.ScheduleRestart());
+				}
+				catch (Exception ex)
+				{
+					Log.Warn(ex, "Console service restart failed.");
+					await WriteError(ctx, "重启失败：" + ex.Message, StatusCodes.Status422UnprocessableEntity);
 				}
 				return;
 			}

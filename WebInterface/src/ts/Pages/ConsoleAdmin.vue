@@ -18,6 +18,22 @@
     </section>
     <UpdatePanel :open="updateOpen" @close="updateOpen = false" @applied="onUpdateApplied"/>
 
+    <section class="service-card">
+      <div class="section-heading">
+        <h2>服务与日志</h2>
+        <span v-if="servicePid">PID {{ servicePid }}</span>
+      </div>
+      <p class="service-hint">像面板软件一样：在网页看日志、停止或重启，不必盯着服务器终端。更新后也会自动重启。</p>
+      <div class="service-actions">
+        <button type="button" class="secondary" :disabled="serviceBusy" @click="refreshLogs">刷新日志</button>
+        <button type="button" class="secondary" :disabled="serviceBusy" @click="restartService">重启服务</button>
+        <button type="button" class="danger" :disabled="serviceBusy" @click="stopService">停止服务</button>
+      </div>
+      <p v-if="serviceMessage" class="service-message">{{ serviceMessage }}</p>
+      <p v-if="logPath" class="log-path">日志文件：{{ logPath }}</p>
+      <pre class="log-view" ref="logView">{{ logText || '暂无日志。' }}</pre>
+    </section>
+
     <div class="grid">
       <section class="brand-card">
         <h2>站点名称</h2>
@@ -96,6 +112,8 @@ export default Vue.extend({
       username: "", userPassword: "", role: "user",
       editing: null as Bot | null, editAddress: "", editNickname: "", editPassword: "",
       updateOpen: false, currentVersion: "", latestVersion: "", hasUpdate: false,
+      servicePid: 0 as number | string, serviceBusy: false, serviceMessage: "",
+      logText: "", logPath: "", logTimer: 0 as any,
     };
   },
   computed: {
@@ -110,6 +128,12 @@ export default Vue.extend({
     this.brandName = user.brandName;
     await this.reload();
     await this.refreshUpdate();
+    await this.refreshService();
+    await this.refreshLogs();
+    this.logTimer = setInterval(() => this.refreshLogs(true), 5000);
+  },
+  beforeDestroy() {
+    if (this.logTimer) clearInterval(this.logTimer);
   },
   methods: {
     async reload() {
@@ -129,6 +153,59 @@ export default Vue.extend({
     onUpdateApplied() {
       this.hasUpdate = false;
       this.refreshUpdate();
+    },
+    async refreshService() {
+      try {
+        const status = await consoleApi<{ pid?: number }>("service/status");
+        this.servicePid = status.pid || "";
+      } catch (_) { /* ignore */ }
+    },
+    async refreshLogs(silent = false) {
+      try {
+        const logs = await consoleApi<{ text?: string; path?: string }>("service/logs?lines=250");
+        this.logText = logs.text || "";
+        this.logPath = logs.path || "";
+        this.$nextTick(() => {
+          const el = this.$refs.logView as HTMLElement | undefined;
+          if (el) el.scrollTop = el.scrollHeight;
+        });
+      } catch (error) {
+        if (!silent) this.error = error instanceof Error ? error.message : "读取日志失败。";
+      }
+    },
+    askPassword(actionLabel: string) {
+      const value = window.prompt("请输入管理员密码以" + actionLabel + "：", "");
+      return value == null ? null : value;
+    },
+    async restartService() {
+      const password = this.askPassword("重启服务");
+      if (password === null) return;
+      this.serviceBusy = true;
+      this.serviceMessage = "";
+      try {
+        const result = await consoleApi<{ message?: string }>("service/restart", { password });
+        this.serviceMessage = result.message || "服务即将重启，请稍候刷新。";
+        setTimeout(() => { window.location.reload(); }, 12000);
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : "重启失败。";
+      } finally {
+        this.serviceBusy = false;
+      }
+    },
+    async stopService() {
+      const password = this.askPassword("停止服务");
+      if (password === null) return;
+      if (!window.confirm("确定停止服务？停止后网页将无法访问，需要在服务器上重新运行启动脚本。")) return;
+      this.serviceBusy = true;
+      this.serviceMessage = "";
+      try {
+        const result = await consoleApi<{ message?: string }>("service/stop", { password });
+        this.serviceMessage = result.message || "服务即将停止。";
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : "停止失败。";
+      } finally {
+        this.serviceBusy = false;
+      }
     },
     statusText(status: string) { return status === "connected" ? "已连接" : status === "connecting" ? "连接中" : "离线"; },
     async run(action: () => Promise<any>) {
@@ -189,6 +266,22 @@ export default Vue.extend({
   cursor: pointer; font: inherit; white-space: nowrap;
 }
 .update-card button.glow { background: #d4a017; box-shadow: 0 6px 16px rgba(212, 160, 23, 0.28); }
+.service-card {
+  margin-top: 16px; padding: 18px 20px; border: 1px solid #dfe6e8; border-radius: 10px; background: #fff;
+}
+.service-hint { margin: 8px 0 0; color: #778595; font-size: 13px; line-height: 1.55; }
+.service-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.service-actions button { height: 36px; padding: 0 12px; border: 0; border-radius: 8px; font: inherit; cursor: pointer; }
+.service-actions button:disabled { opacity: .6; cursor: wait; }
+.service-actions .secondary { background: #edf1f2; color: #4c5d69; }
+.service-actions .danger { background: #fff0f1; color: #bd4d55; }
+.service-message { margin: 12px 0 0; color: #197565; font-size: 13px; }
+.log-path { margin: 10px 0 0; color: #8b97a3; font-size: 12px; }
+.log-view {
+  margin: 10px 0 0; max-height: 280px; overflow: auto; padding: 12px 14px;
+  border-radius: 8px; background: #101820; color: #d7e2ea; font-size: 12px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+}
 .grid { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(0, 1.8fr); grid-template-rows: auto auto auto; gap: 20px; margin-top: 20px; align-items: start; }
 .grid section { min-width: 0; padding: 22px; border: 1px solid #dfe6e8; border-radius: 10px; background: #fff; }
 .brand-card { grid-column-start: 1; grid-column-end: 2; grid-row: 1; }
