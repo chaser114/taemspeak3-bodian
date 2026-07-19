@@ -316,6 +316,32 @@ namespace TS3AudioBot.Web
 				});
 				await WriteJson(ctx, new { bots }); return;
 			}
+			if (path == "bots/description-permission")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可查看该提示。", StatusCodes.Status403Forbidden); return; }
+				try
+				{
+					var force = string.Equals(ctx.Request.Query["force"].ToString(), "1", StringComparison.Ordinal)
+						|| string.Equals(ctx.Request.Query["force"].ToString(), "true", StringComparison.OrdinalIgnoreCase);
+					await WriteJson(ctx, await console.GetDescriptionPermissionStatus(force));
+				}
+				catch (Exception ex)
+				{
+					Log.Warn(ex, "Description permission check failed.");
+					await WriteError(ctx, "检查简介权限失败。", StatusCodes.Status422UnprocessableEntity);
+				}
+				return;
+			}
+			if (path == "bots/description-permission/dismiss" && ctx.Request.Method == "POST")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可操作。", StatusCodes.Status403Forbidden); return; }
+				await WriteJson(ctx, console.DismissDescriptionPermissionNotice()); return;
+			}
+			if (path == "bots/description-permission/reset" && ctx.Request.Method == "POST")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可操作。", StatusCodes.Status403Forbidden); return; }
+				await WriteJson(ctx, console.ResetDescriptionPermissionNotice()); return;
+			}
 			if (path == "bots/delete" && account.Role == WebAccountRole.Admin && ctx.Request.Method == "POST")
 			{
 				var id = (await ReadJson(ctx)).Value<string>("id") ?? string.Empty;

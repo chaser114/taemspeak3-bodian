@@ -16,11 +16,13 @@ namespace TS3AudioBot.Web
 	{
 		private readonly BotManager botManager;
 		private readonly ConfRoot rootConfig;
+		private readonly WebAccountService webAccounts;
 
-		public WebConsoleService(BotManager botManager, ConfRoot rootConfig)
+		public WebConsoleService(BotManager botManager, ConfRoot rootConfig, WebAccountService webAccounts)
 		{
 			this.botManager = botManager;
 			this.rootConfig = rootConfig;
+			this.webAccounts = webAccounts;
 		}
 
 		public async Task<object> GetState(string? botId = null)
@@ -71,6 +73,77 @@ namespace TS3AudioBot.Web
 
 		public Task Clear(string? botId = null)
 			=> OnBot(string.Empty, botId, (playManager, player, playlist) => { playManager.ClearQueue(); return Task.CompletedTask; });
+
+		/// <summary>
+		/// Admin-only health check: whether bots can write their TeamSpeak description.
+		/// Respects "暂不理会" dismiss flag stored in web settings.
+		/// </summary>
+		public async Task<object> GetDescriptionPermissionStatus(bool forceProbe = false)
+		{
+			if (webAccounts.IsDescriptionPermissionDismissed)
+			{
+				return new
+				{
+					needsAttention = false,
+					dismissed = true,
+					bots = Array.Empty<object>(),
+					message = (string?)null,
+				};
+			}
+
+			var infos = botManager.GetBotInfolist().Where(x => !string.IsNullOrWhiteSpace(x.Name)).ToArray();
+			var report = new List<object>();
+			var missing = new List<string>();
+
+			foreach (var info in infos)
+			{
+				if (!(info.Id is int id)) continue;
+				var bot = botManager.GetBotLock(id);
+				if (bot is null) continue;
+				if (info.Status != BotStatus.Connected)
+				{
+					report.Add(new { id = bot.Name, name = info.Name, connected = false, canSetDescription = (bool?)null });
+					continue;
+				}
+
+				bool ok;
+				if (forceProbe || bot.DescriptionPermissionOk is null)
+					ok = await bot.ProbeDescriptionPermissionAsync();
+				else
+					ok = bot.DescriptionPermissionOk.Value;
+
+				report.Add(new { id = bot.Name, name = info.Name ?? bot.Name, connected = true, canSetDescription = ok });
+				if (!ok) missing.Add(string.IsNullOrWhiteSpace(info.Name) ? (bot.Name ?? id.ToString()) : info.Name!);
+			}
+
+			var needsAttention = missing.Count > 0;
+			string? message = null;
+			if (needsAttention)
+			{
+				var names = string.Join("、", missing);
+				message = $"机器人「{names}」当前没有修改简介的权限。请在 TeamSpeak 服务器权限里给机器人身份组勾选“修改自己的简介 / 修改客户端简介”，或将机器人加入管理员组，否则播放时简介无法显示歌名。";
+			}
+
+			return new
+			{
+				needsAttention,
+				dismissed = false,
+				bots = report,
+				message,
+			};
+		}
+
+		public object DismissDescriptionPermissionNotice()
+		{
+			webAccounts.SetDescriptionPermissionDismissed(true);
+			return new { ok = true, dismissed = true };
+		}
+
+		public object ResetDescriptionPermissionNotice()
+		{
+			webAccounts.SetDescriptionPermissionDismissed(false);
+			return new { ok = true, dismissed = false };
+		}
 
 		private Task OnBot(string username, string? botId, Func<PlayManager, Player, PlaylistManager, Task> operation)
 		{

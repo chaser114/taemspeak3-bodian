@@ -41,6 +41,12 @@ namespace TS3AudioBot.Web
 			settings.Upsert(new WebSetting { Key = "brand_name", Value = value.Trim() });
 		}
 
+		public bool IsDescriptionPermissionDismissed
+			=> string.Equals(settings.FindById("desc_perm_dismissed")?.Value, "1", StringComparison.Ordinal);
+
+		public void SetDescriptionPermissionDismissed(bool dismissed)
+			=> settings.Upsert(new WebSetting { Key = "desc_perm_dismissed", Value = dismissed ? "1" : "0" });
+
 		public bool CreateInitialAdmin(string username, string password, out string error)
 		{
 			lock (sync)

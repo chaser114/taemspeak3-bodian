@@ -42,6 +42,7 @@ namespace TS3AudioBot
 		private readonly TickWorker idleTickWorker;
 
 		private bool isClosed;
+		private bool? descriptionPermissionOk;
 		internal BotInjector Injector { get; }
 		internal DedicatedTaskScheduler Scheduler { get; }
 
@@ -49,6 +50,8 @@ namespace TS3AudioBot
 		/// <summary>This is the template name. Can be null.</summary>
 		public string? Name => config.Name;
 		public bool QuizMode { get; set; }
+		/// <summary>null = not tested yet; true = can set description; false = missing TS permission.</summary>
+		public bool? DescriptionPermissionOk => descriptionPermissionOk;
 
 		private readonly ResolveContext resourceResolver;
 		private readonly Ts3Client ts3client;
@@ -402,7 +405,39 @@ namespace TS3AudioBot
 			}
 
 			var result = await ts3FullClient.ChangeDescription(setString ?? "");
-			result.UnwrapToLog(Log);
+			if (result.Ok)
+			{
+				descriptionPermissionOk = true;
+			}
+			else
+			{
+				descriptionPermissionOk = false;
+				result.UnwrapToLog(Log);
+			}
+		}
+
+		/// <summary>
+		/// Probes whether the bot identity can change its own description.
+		/// Used by the web console to remind admins to grant TS permissions.
+		/// </summary>
+		public Task<bool> ProbeDescriptionPermissionAsync()
+			=> Scheduler.InvokeAsync(ProbeDescriptionPermissionInternal);
+
+		private async Task<bool> ProbeDescriptionPermissionInternal()
+		{
+			Scheduler.VerifyOwnThread();
+			if (isClosed || !ts3FullClient.Connected)
+				return descriptionPermissionOk ?? false;
+
+			// Prefer a live probe so the admin can fix permissions without waiting for a song change.
+			var current = playManager.IsPlaying
+				? (QuizMode ? strings.info_botstatus_quiztime : playManager.CurrentPlayData?.ResourceData?.ResourceTitle)
+				: strings.info_botstatus_sleeping;
+			var result = await ts3FullClient.ChangeDescription(current ?? strings.info_botstatus_sleeping);
+			descriptionPermissionOk = result.Ok;
+			if (!result.Ok)
+				result.UnwrapToLog(Log);
+			return result.Ok;
 		}
 
 		public Task GenerateStatusImage(bool playing, PlayInfoEventArgs? startEvent)

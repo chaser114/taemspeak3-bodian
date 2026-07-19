@@ -53,6 +53,7 @@
     </nav>
 
     <UpdatePanel :open="updateOpen" @close="updateOpen = false" @applied="onApplied"/>
+    <DescriptionPermissionNotice ref="descNotice"/>
   </div>
 </template>
 
@@ -60,9 +61,10 @@
 import Vue from "vue";
 import { consoleApi, ConsoleUser } from "../ConsoleApi";
 import UpdatePanel from "./UpdatePanel.vue";
+import DescriptionPermissionNotice from "./DescriptionPermissionNotice.vue";
 
 export default Vue.extend({
-  components: { UpdatePanel },
+  components: { UpdatePanel, DescriptionPermissionNotice },
   data() {
     return {
       brandName: "波点音乐",
@@ -88,6 +90,10 @@ export default Vue.extend({
       if (this.isAdmin) {
         await this.refreshUpdateBadge();
         this.pollTimer = setInterval(() => this.refreshUpdateBadge(), 10 * 60 * 1000);
+        this.$nextTick(() => {
+          const notice = this.$refs.descNotice as any;
+          if (notice && notice.check) notice.check(true);
+        });
       }
     } catch (_) {
       this.$router.replace("/");
