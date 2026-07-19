@@ -4,13 +4,16 @@ on:
   push:
     branches: [main, master]
     paths-ignore:
-      - README.md
       - docs/**
       - .github/ISSUE_TEMPLATE/**
   workflow_dispatch:
 
 permissions:
   contents: write
+
+env:
+  # Old webpack 4 needs the OpenSSL legacy provider on modern Node.
+  NODE_OPTIONS: --openssl-legacy-provider
 
 jobs:
   build:
@@ -26,10 +29,12 @@ jobs:
         with:
           dotnet-version: 6.0.x
 
+      # Pin to Node 18: GitHub currently forces some Node 20 actions onto Node 24,
+      # which breaks webpack 4 digests even with openssl-legacy-provider in some cases.
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 18
 
       - name: Restore dependencies
         run: |
@@ -42,10 +47,15 @@ jobs:
           dotnet build KuwoMusicPlugin/KuwoMusicPlugin.csproj --configuration Release -p:SkipGitVersion=true --no-restore
 
       - name: Build web console
+        working-directory: WebInterface
         run: |
-          cd WebInterface
+          node -v
+          npm -v
           npm ci
-          NODE_OPTIONS=--openssl-legacy-provider npm run build
+          npm run build
+          test -s dist/index.html
+          test -s dist/bundle.js
+          grep -Fq "bot-select-icon" dist/bundle.js
 
       - name: Validate Docker Compose configuration
         run: docker compose config

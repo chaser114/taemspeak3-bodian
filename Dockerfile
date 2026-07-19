@@ -1,8 +1,14 @@
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
-RUN apt-get update && apt-get install -y curl ca-certificates && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
+# Pin Node 18 for webpack 4 compatibility (OpenSSL legacy provider).
+RUN apt-get update && apt-get install -y curl ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
-RUN cd WebInterface && npm ci && NODE_OPTIONS=--openssl-legacy-provider npm run build
+RUN cd WebInterface \
+    && npm ci \
+    && NODE_OPTIONS=--openssl-legacy-provider npm run build
 RUN dotnet restore TS3AudioBot/TS3AudioBot.csproj --runtime linux-x64 -p:SkipGitVersion=true \
     && dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj --runtime linux-x64 -p:SkipGitVersion=true \
     && dotnet build KuwoMusicPlugin/KuwoMusicPlugin.csproj -c Release -p:SkipGitVersion=true --no-restore \
