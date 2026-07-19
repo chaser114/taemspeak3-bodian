@@ -19,5 +19,16 @@ if command -v apt-get >/dev/null 2>&1; then
 	$SUDO apt-get install -y ffmpeg libopus0
 fi
 
+# Durable data dir: bots, accounts, rights. Survives package overwrite upgrades.
+if [ -f "$repo/packaging/common/prepare-data.sh" ]; then
+	sh "$repo/packaging/common/prepare-data.sh" "$repo" >/dev/null
+else
+	mkdir -p "$repo/data/bots"
+	if [ ! -f "$repo/data/ts3audiobot.toml" ]; then
+		printf '%s\n' '[configs]' 'bots_path = "bots"' '' '[db]' 'path = "ts3audiobot.db"' '' '[rights]' 'path = "rights.toml"' '' '[plugins]' 'path = "../plugins"' > "$repo/data/ts3audiobot.toml"
+	fi
+fi
+
 chmod +x "$repo/TS3AudioBot"
-exec "$repo/TS3AudioBot" --non-interactive "$@"
+cd "$repo/data"
+exec "$repo/TS3AudioBot" --config ts3audiobot.toml --non-interactive "$@"

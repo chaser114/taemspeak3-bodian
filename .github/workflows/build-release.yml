@@ -74,7 +74,12 @@ jobs:
           cp /tmp/ffmpeg/*/bin/ffmpeg.exe artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/
           cp packaging/windows/start.bat packaging/windows/start-web-console.bat packaging/windows/README.md artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/
           mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/run
-          cp run/start-web-console.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/run/
+          mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/packaging/common
+          mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/data
+          cp run/start-web-console.bat run/update-windows.ps1 run/update-windows.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/run/
+          cp run/update-windows.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/
+          cp packaging/common/prepare-data.ps1 packaging/common/update-in-place.ps1 artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/packaging/common/
+          printf '%s\n' "This folder stores bots, web accounts and rights. Keep it when upgrading." > artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/data/README.txt
           cd artifacts/windows && zip -qr ../TS3AudioBot-KuwoPlugin-windows-x64.zip TS3AudioBot-KuwoPlugin-windows-x64
 
       - name: Upload workflow artifacts

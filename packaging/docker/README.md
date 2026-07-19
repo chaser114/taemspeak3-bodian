@@ -15,6 +15,14 @@ http://服务器IP:58913
 
 首次访问时创建管理员账号，再填写 TeamSpeak 服务器地址和密码。`data/` 目录保存机器人配置、网页账号和数据；不要删除它。
 
+升级时只需重新构建并启动（数据卷会保留）：
+
+```bash
+./packaging/docker/install-docker.sh
+# 或
+docker compose up -d --build
+```
+
 停止服务：
 
 ```bash

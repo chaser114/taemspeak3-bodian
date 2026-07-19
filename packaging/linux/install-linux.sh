@@ -7,4 +7,8 @@ if command -v apt-get >/dev/null 2>&1; then
 	$SUDO apt-get install -y ffmpeg libopus0
 fi
 chmod +x "$base/TS3AudioBot" "$base/start.sh"
+if [ -f "$base/run/start-linux.sh" ]; then
+	chmod +x "$base/run/start-linux.sh"
+	exec "$base/run/start-linux.sh"
+fi
 exec "$base/start.sh"

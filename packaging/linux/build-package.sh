@@ -58,20 +58,30 @@ mkdir -p "$output_dir"
 
 plugin="$repo/KuwoMusicPlugin/bin/Release/net6.0/KuwoMusicPlugin.dll"
 test -s "$plugin"
-mkdir -p "$output_dir/plugins" "$output_dir/WebInterface" "$output_dir/run"
+mkdir -p "$output_dir/plugins" "$output_dir/WebInterface" "$output_dir/run" "$output_dir/packaging/common" "$output_dir/packaging/linux"
 cp "$plugin" "$output_dir/plugins/KuwoMusicPlugin.dll"
 cp -a "$repo/WebInterface/dist/." "$output_dir/WebInterface/"
 cp "$repo/packaging/linux/start.sh" "$output_dir/start.sh"
 cp "$repo/packaging/linux/install-linux.sh" "$output_dir/install-linux.sh"
 cp "$repo/packaging/linux/README.md" "$output_dir/README.md"
+cp "$repo/packaging/common/prepare-data.sh" "$output_dir/packaging/common/prepare-data.sh"
+cp "$repo/packaging/common/update-in-place.sh" "$output_dir/packaging/common/update-in-place.sh"
 cp "$repo/run/start-linux.sh" "$output_dir/run/start-linux.sh"
+cp "$repo/run/update-linux.sh" "$output_dir/run/update-linux.sh"
+# Empty data placeholder so users see the durable data directory in the package.
+mkdir -p "$output_dir/data"
+printf '%s\n' "This folder stores bots, web accounts and rights. Keep it when upgrading." > "$output_dir/data/README.txt"
 
-chmod +x "$output_dir/TS3AudioBot" "$output_dir/start.sh" "$output_dir/install-linux.sh" "$output_dir/run/start-linux.sh"
+chmod +x "$output_dir/TS3AudioBot" "$output_dir/start.sh" "$output_dir/install-linux.sh" \
+	"$output_dir/run/start-linux.sh" "$output_dir/run/update-linux.sh" \
+	"$output_dir/packaging/common/prepare-data.sh" "$output_dir/packaging/common/update-in-place.sh"
 test -x "$output_dir/TS3AudioBot"
 test -x "$output_dir/run/start-linux.sh"
+test -x "$output_dir/run/update-linux.sh"
 test -s "$output_dir/plugins/KuwoMusicPlugin.dll"
 test -s "$output_dir/WebInterface/index.html"
 test -s "$output_dir/WebInterface/bundle.js"
+test -s "$output_dir/packaging/common/update-in-place.sh"
 grep -Fq "bot-select-icon" "$output_dir/WebInterface/bundle.js"
 
 archive="$output_dir.tar.gz"

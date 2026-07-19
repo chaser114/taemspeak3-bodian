@@ -35,7 +35,40 @@
 - 桌面端和手机端响应式布局
 - 编辑机器人时弹窗修改连接信息并重新连接
 
-启动后访问 `http://服务器IP:58913`。网页配置和机器人数据保存在运行目录的 `data/` 中，请勿删除。
+启动后访问 `http://服务器IP:58913`。网页配置和机器人数据保存在运行目录的 **`data/`** 中，请勿删除。
+
+## 数据与无损升级
+
+程序文件和用户数据已分开：
+
+| 目录/文件 | 内容 | 升级时 |
+|-----------|------|--------|
+| `data/` | 机器人、网页账号、权限、主配置 | **必须保留** |
+| 主程序、`plugins/`、`WebInterface/` | 程序与界面 | 可被新版本替换 |
+
+### 推荐升级方式（给最终用户）
+
+**不要**把新包直接解压覆盖旧目录。请用包内升级脚本：
+
+**Linux**
+
+```bash
+# 在旧安装目录执行
+./run/update-linux.sh /path/to/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
+./run/start-linux.sh
+```
+
+**Windows**
+
+```bat
+update-windows.bat ..\TS3AudioBot-KuwoPlugin-windows-x64-new
+start-web-console.bat
+```
+
+脚本会自动：备份 `data/` → 只替换程序 → 保留机器人与账号。  
+旧版本若数据还在安装根目录（`bots/`、`ts3audiobot.db` 等），下次启动会自动迁入 `data/`。
+
+**Docker** 继续使用挂载的 `data/` 卷，`docker compose up -d --build` 重建镜像即可，不要删 `data/`。
 
 ## 下载
 
@@ -83,11 +116,11 @@ chmod +x run/start-linux.sh
 ./run/start-linux.sh
 ```
 
-也可以直接运行包内的 `start.sh`。首次启动后打开网页完成管理员账号和 TeamSpeak 连接配置。启动脚本会检查并安装 `ffmpeg`、`libopus0`（Debian/Ubuntu）。
+也可以直接运行包内的 `start.sh`。首次启动后打开网页完成管理员账号和 TeamSpeak 连接配置。启动脚本会检查并安装 `ffmpeg`、`libopus0`（Debian/Ubuntu），并自动准备 `data/` 数据目录。
 
 ### Windows 一键部署
 
-解压 Windows 发布包后，双击包根目录的 `start-web-console.bat` 即可启动机器人和网页端；也可以双击 `run/start-web-console.bat`。包内已包含 .NET runtime、`ffmpeg.exe`、网页控制台和酷我插件。
+解压 Windows 发布包后，双击包根目录的 `start-web-console.bat` 即可启动机器人和网页端；也可以双击 `run/start-web-console.bat`。包内已包含 .NET runtime、`ffmpeg.exe`、网页控制台和酷我插件。启动时会自动准备 `data\` 数据目录。
 
 网页地址：`http://127.0.0.1:58913`
 

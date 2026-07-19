@@ -42,5 +42,15 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "start.bat") -Destination (Join-
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "start-web-console.bat") -Destination (Join-Path $outputPath "start-web-console.bat") -Force
 New-Item -ItemType Directory -Force -Path (Join-Path $outputPath "run") | Out-Null
 Copy-Item -LiteralPath (Join-Path $projectRoot "run\start-web-console.bat") -Destination (Join-Path $outputPath "run\start-web-console.bat") -Force
+Copy-Item -LiteralPath (Join-Path $projectRoot "run\update-windows.ps1") -Destination (Join-Path $outputPath "run\update-windows.ps1") -Force
+Copy-Item -LiteralPath (Join-Path $projectRoot "run\update-windows.bat") -Destination (Join-Path $outputPath "run\update-windows.bat") -Force
+Copy-Item -LiteralPath (Join-Path $projectRoot "run\update-windows.bat") -Destination (Join-Path $outputPath "update-windows.bat") -Force
+New-Item -ItemType Directory -Force -Path (Join-Path $outputPath "packaging\common") | Out-Null
+Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\common\prepare-data.ps1") -Destination (Join-Path $outputPath "packaging\common\prepare-data.ps1") -Force
+Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\common\update-in-place.ps1") -Destination (Join-Path $outputPath "packaging\common\update-in-place.ps1") -Force
+# Empty data placeholder so users see the durable data directory in the package.
+$dataDir = Join-Path $outputPath "data"
+New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+Set-Content -LiteralPath (Join-Path $dataDir "README.txt") -Value "This folder stores bots, web accounts and rights. Keep it when upgrading." -Encoding UTF8
 
 Write-Host "Windows package created: $outputPath"
