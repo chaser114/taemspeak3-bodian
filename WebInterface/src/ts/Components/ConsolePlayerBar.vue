@@ -12,9 +12,9 @@
     </button>
 
     <div class="controls" aria-label="播放控制">
-      <button title="上一首" aria-label="上一首" @click="$emit('previous')">⏮</button>
-      <button class="play-button" :title="state.paused ? '继续播放' : '暂停播放'" :aria-label="state.paused ? '继续播放' : '暂停播放'" @click="$emit('pause')">{{ state.paused ? '▶' : 'Ⅱ' }}</button>
-      <button title="下一首" aria-label="下一首" @click="$emit('next')">⏭</button>
+      <button title="上一首" aria-label="上一首" :disabled="busy" @click="$emit('previous')">⏮</button>
+      <button class="play-button" :title="state.paused ? '继续播放' : '暂停播放'" :aria-label="state.paused ? '继续播放' : '暂停播放'" :disabled="busy" @click="$emit('pause')">{{ state.paused ? '▶' : 'Ⅱ' }}</button>
+      <button title="下一首" aria-label="下一首" :disabled="busy" @click="$emit('next')">⏭</button>
     </div>
 
     <div class="timeline">
@@ -33,7 +33,10 @@ import Vue from "vue";
 import { MusicState } from "../ConsoleApi";
 
 export default Vue.extend({
-  props: { state: { type: Object as () => MusicState, required: true } },
+  props: {
+    state: { type: Object as () => MusicState, required: true },
+    busy: { type: Boolean, default: false },
+  },
   data() {
     const now = Date.now();
     return {
@@ -51,6 +54,7 @@ export default Vue.extend({
   watch: {
     state: {
       immediate: true,
+      deep: true,
       handler(state: MusicState) {
         const nextTrackKey = this.trackKeyFor(state);
         const nextPosition = Math.max(0, state.position || 0);
@@ -124,11 +128,12 @@ button { border: 0; background: transparent; cursor: pointer; }
 .track-copy b, .track-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .track-copy small { margin-top: 5px; color: #768493; }
 .controls { display: flex; align-items: center; gap: 10px; }
-.controls button { width: 38px; height: 38px; border-radius: 50%; color: #476170; font-size: 18px; transition: background .18s ease, color .18s ease, transform .18s cubic-bezier(.22,.61,.36,1), box-shadow .18s ease; }
-.controls button:hover { background: #edf7f5; color: #257e73; transform: translateY(-2px); }
-.controls button:active { transform: translateY(0) scale(.9); }
+.controls button { width: 38px; height: 38px; border-radius: 50%; color: #476170; font-size: 18px; transition: background .18s ease, color .18s ease, transform .18s cubic-bezier(.22,.61,.36,1), box-shadow .18s ease, opacity .18s ease; }
+.controls button:hover:not(:disabled) { background: #edf7f5; color: #257e73; transform: translateY(-2px); }
+.controls button:active:not(:disabled) { transform: translateY(0) scale(.9); }
+.controls button:disabled { opacity: .55; cursor: wait; }
 .controls .play-button { width: 52px; height: 52px; background: #4fb8a8; color: #fff; font-size: 20px; box-shadow: 0 5px 12px rgba(79,184,168,.28); }
-.controls .play-button:hover { background: #257e73; color: #fff; box-shadow: 0 8px 18px rgba(37,126,115,.25); }
+.controls .play-button:hover:not(:disabled) { background: #257e73; color: #fff; box-shadow: 0 8px 18px rgba(37,126,115,.25); }
 .timeline { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 160px; }
 .progress-track { height: 4px; flex: 1; overflow: hidden; border-radius: 4px; background: #dfe6e8; }
 .progress-track i { display: block; width: 100%; height: 100%; background: #4fb8a8; transform-origin: left center; will-change: transform; transition: transform .08s linear; }

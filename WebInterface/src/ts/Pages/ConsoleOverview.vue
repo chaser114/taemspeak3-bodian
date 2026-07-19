@@ -25,8 +25,8 @@
           <img v-if="cover(track)" :src="cover(track)" :alt="track.title">
           <i v-else>♫</i>
           <div><b>{{ track.title || '未命名歌曲' }}</b></div>
-          <button @click="play(track)">播放</button>
-          <button @click="add(track)">加入</button>
+          <button :disabled="busy" @click="play(track)">播放</button>
+          <button :disabled="busy" @click="add(track)">加入</button>
         </article>
       </section>
 
@@ -36,12 +36,12 @@
           <img v-if="track.coverUrl" :src="track.coverUrl" :alt="track.title">
           <i v-else>♫</i>
           <div><b>{{ track.title }}</b></div>
-          <button @click="play(track.resource)">播放</button>
+          <button :disabled="busy" @click="play(track.resource)">播放</button>
         </article>
         <p v-if="!state.recent.length">还没有播放记录。</p>
       </section>
 
-      <ConsolePlayerBar :state="state" @previous="control('previous')" @pause="control('pause')" @next="control('next')" @queue="queueOpen = true"/>
+      <ConsolePlayerBar :state="state" :busy="busy" @previous="control('previous')" @pause="control('pause')" @next="control('next')" @queue="queueOpen = true"/>
       <ConsoleQueueDrawer :open="queueOpen" :queue="state.queue" :is-admin="isAdmin" @close="queueOpen = false" @clear="clear"/>
     </template>
   </main>
@@ -59,17 +59,29 @@ export default Vue.extend({
   components: { ConsolePlayerBar, ConsoleQueueDrawer },
   props: { recentOnly: { type: Boolean, default: false } },
   data() {
-    return { state: blank as MusicState, results: [] as TrackResource[], bots: [] as ConsoleBot[], botId: "", error: "", isAdmin: false, queueOpen: false, timer: 0 as any, listener: null as any };
+    return {
+      state: blank as MusicState,
+      results: [] as TrackResource[],
+      bots: [] as ConsoleBot[],
+      botId: "",
+      error: "",
+      isAdmin: false,
+      queueOpen: false,
+      busy: false,
+      actionToken: 0,
+      timer: 0 as any,
+      listener: null as any,
+    };
   },
   async created() {
     const user = await consoleApi<ConsoleUser>("me");
     this.isAdmin = user.role === "admin";
     this.bots = (await consoleApi<{ bots: ConsoleBot[] }>("bots")).bots;
     this.botId = this.bots[0] ? this.bots[0].id : "";
-    await this.refresh();
+    await this.refresh(true);
     const initialQuery = typeof this.$route.query.q === "string" ? this.$route.query.q : "";
     if (initialQuery) await this.search(initialQuery);
-    this.timer = setInterval(this.refresh, 5000);
+    this.timer = setInterval(() => this.refresh(false), 5000);
     this.listener = (event: any) => this.search(event.detail);
     window.addEventListener("console-search", this.listener);
   },
@@ -83,9 +95,27 @@ export default Vue.extend({
   methods: {
     cover(track: TrackResource) { return track.add && track.add.cover_url; },
     statusText(status: string) { return status === "connected" ? "已连接" : status === "connecting" ? "连接中" : "离线"; },
-    async refresh() {
-      try { this.state = await consoleApi<MusicState>("music/state?botId=" + encodeURIComponent(this.botId)); }
-      catch (error) { this.error = error instanceof Error ? error.message : "状态同步失败。"; }
+    nextQueueTrack() {
+      const queue = this.state.queue || [];
+      if (!queue.length) return null;
+      const activeIndex = queue.findIndex((track) => track.active);
+      if (activeIndex >= 0 && activeIndex + 1 < queue.length) return queue[activeIndex + 1];
+      if (activeIndex < 0) return queue[0];
+      return null;
+    },
+    async refresh(force = false) {
+      if (this.busy && !force) return;
+      const token = this.actionToken;
+      try {
+        const next = await consoleApi<MusicState>("music/state?botId=" + encodeURIComponent(this.botId));
+        if (this.busy && !force) return;
+        if (token !== this.actionToken && !force) return;
+        this.state = next;
+        this.error = "";
+      } catch (error) {
+        if (this.busy && !force) return;
+        this.error = error instanceof Error ? error.message : "状态同步失败。";
+      }
     },
     async search(query: string) {
       if (!query) return;
@@ -94,18 +124,58 @@ export default Vue.extend({
     },
     async selectBot() {
       this.results = [];
-      await this.refresh();
+      await this.refresh(true);
       const query = this.$route.query.q;
       if (!this.recentOnly && typeof query === "string" && query) await this.search(query);
     },
-    async call(path: string, body: any = {}) {
-      try { await consoleApi(path, { ...body, botId: this.botId }); await this.refresh(); }
-      catch (error) { this.error = error instanceof Error ? error.message : "操作失败。"; }
+    async call(path: string, body: any = {}, optimistic?: () => void) {
+      const token = ++this.actionToken;
+      this.busy = true;
+      this.error = "";
+      if (optimistic) optimistic();
+      try {
+        await consoleApi(path, { ...body, botId: this.botId });
+        if (token !== this.actionToken) return;
+        await this.refresh(true);
+      } catch (error) {
+        if (token !== this.actionToken) return;
+        this.error = error instanceof Error ? error.message : "操作失败。";
+        await this.refresh(true);
+      } finally {
+        if (token === this.actionToken) this.busy = false;
+      }
     },
-    play(resource: TrackResource) { return this.call("music/play", { resource }); },
-    add(resource: TrackResource) { return this.call("music/add", { resource }); },
-    control(name: string) { return this.call("music/" + name); },
-    clear() { this.queueOpen = false; return this.call("music/clear"); },
+    play(resource: TrackResource) {
+      return this.call("music/play", { resource });
+    },
+    add(resource: TrackResource) {
+      return this.call("music/add", { resource });
+    },
+    control(name: string) {
+      if (name === "pause") {
+        return this.call("music/pause", {}, () => {
+          this.state = { ...this.state, paused: !this.state.paused };
+        });
+      }
+      if (name === "next") {
+        return this.call("music/next", {}, () => {
+          const next = this.nextQueueTrack();
+          if (!next) return;
+          this.state = {
+            ...this.state,
+            current: { ...next, active: true },
+            paused: false,
+            position: 0,
+            length: 0,
+          };
+        });
+      }
+      return this.call("music/" + name);
+    },
+    clear() {
+      this.queueOpen = false;
+      return this.call("music/clear");
+    },
   },
 });
 </script>
@@ -129,6 +199,7 @@ export default Vue.extend({
 .music article div { flex: 1; min-width: 0; }
 .music b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .music button { height: 34px; border: 0; border-radius: 6px; background: #4fb8a8; color: #fff; padding: 0 11px; cursor: pointer; }
+.music button:disabled { opacity: .62; cursor: wait; }
 .error { color: #b34d57; }
 @media (max-width: 760px) { .music { padding: 28px 16px; } .bot-select { display: flex; align-items: stretch; flex-direction: column; gap: 7px; margin-top: 18px; } .bot-select-control { width: 100%; min-width: 0; } .bot-select select { width: 100%; } }
 </style>
