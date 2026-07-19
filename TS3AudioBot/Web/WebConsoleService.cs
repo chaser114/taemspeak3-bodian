@@ -62,7 +62,12 @@ namespace TS3AudioBot.Web
 			=> OnBot(username, botId, (playManager, player, playlist) => playManager.Previous(WebInvoker(username)));
 
 		public Task TogglePause(string? botId = null)
-			=> OnBot(string.Empty, botId, (playManager, player, playlist) => { player.Paused = !player.Paused; return Task.CompletedTask; });
+			=> OnBot(string.Empty, botId, (playManager, player, playlist) =>
+			{
+				if (playManager.CurrentPlayData is null) return Task.CompletedTask;
+				player.Paused = !player.Paused;
+				return Task.CompletedTask;
+			});
 
 		public Task Clear(string? botId = null)
 			=> OnBot(string.Empty, botId, (playManager, player, playlist) => { playManager.ClearQueue(); return Task.CompletedTask; });

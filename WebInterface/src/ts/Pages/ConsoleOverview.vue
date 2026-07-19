@@ -153,11 +153,13 @@ export default Vue.extend({
     },
     control(name: string) {
       if (name === "pause") {
+        if (!this.state.current) return Promise.resolve();
         return this.call("music/pause", {}, () => {
           this.state = { ...this.state, paused: !this.state.paused };
         });
       }
       if (name === "next") {
+        if (!this.state.current && !(this.state.queue && this.state.queue.length)) return Promise.resolve();
         return this.call("music/next", {}, () => {
           const next = this.nextQueueTrack();
           if (!next) return;
@@ -170,6 +172,7 @@ export default Vue.extend({
           };
         });
       }
+      if (name === "previous" && !this.state.current) return Promise.resolve();
       return this.call("music/" + name);
     },
     clear() {

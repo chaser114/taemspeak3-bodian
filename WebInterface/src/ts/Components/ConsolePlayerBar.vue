@@ -12,9 +12,9 @@
     </button>
 
     <div class="controls" aria-label="播放控制">
-      <button title="上一首" aria-label="上一首" :disabled="busy" @click="$emit('previous')">⏮</button>
-      <button class="play-button" :title="state.paused ? '继续播放' : '暂停播放'" :aria-label="state.paused ? '继续播放' : '暂停播放'" :disabled="busy" @click="$emit('pause')">{{ state.paused ? '▶' : 'Ⅱ' }}</button>
-      <button title="下一首" aria-label="下一首" :disabled="busy" @click="$emit('next')">⏭</button>
+      <button title="上一首" aria-label="上一首" :disabled="!canControl" @click="$emit('previous')">⏮</button>
+      <button class="play-button" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')">{{ showPlayIcon ? '▶' : 'Ⅱ' }}</button>
+      <button title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')">⏭</button>
     </div>
 
     <div class="timeline">
@@ -81,6 +81,21 @@ export default Vue.extend({
     },
     trackTitle(): string {
       return this.state.current ? this.state.current.title : "等待点歌";
+    },
+    canControl(): boolean {
+      return !this.busy && !!this.state.current;
+    },
+    canSkip(): boolean {
+      if (this.busy) return false;
+      if (this.state.current) return true;
+      return !!(this.state.queue && this.state.queue.length);
+    },
+    showPlayIcon(): boolean {
+      return !this.state.current || !!this.state.paused;
+    },
+    pauseTitle(): string {
+      if (!this.state.current) return "暂无可播放歌曲";
+      return this.state.paused ? "继续播放" : "暂停播放";
     },
   },
   methods: {
