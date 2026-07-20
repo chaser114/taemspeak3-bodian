@@ -64,29 +64,63 @@
       </section>
 
       <section class="accounts-card">
-        <h2>网页账号</h2>
+        <div class="section-heading">
+          <h2>网页账号</h2>
+          <button type="button" class="text-button" @click="openOwnPassword">修改我的密码</button>
+        </div>
+        <p class="empty">密码至少 8 位。创建成功后会显示在下方列表。</p>
+        <p v-if="accountError" class="inline-error">{{ accountError }}</p>
+        <p v-if="accountSuccess" class="inline-success">{{ accountSuccess }}</p>
         <form class="create-account" @submit.prevent="createAccount">
-          <label>账号<input v-model.trim="username"></label>
-          <label>密码<input v-model="userPassword" type="password"></label>
-          <label>角色<select v-model="role"><option value="user">普通用户</option><option value="admin">管理员</option></select></label>
-          <button>创建账号</button>
+          <label>账号<input v-model.trim="username" autocomplete="off" maxlength="32" placeholder="1-32 个字符"></label>
+          <label>密码<input v-model="userPassword" type="password" autocomplete="new-password" placeholder="至少 8 位"></label>
+          <label>角色
+            <select v-model="role">
+              <option value="user">普通用户</option>
+              <option value="admin">管理员</option>
+            </select>
+          </label>
+          <button type="submit" :disabled="accountBusy">{{ accountBusy ? '创建中…' : '创建账号' }}</button>
         </form>
         <article v-for="account in accounts" :key="account.username">
-          <div><b>{{ account.username }}</b><small>{{ account.role === 'admin' ? '管理员' : '普通用户' }}</small></div>
-          <button class="text-button" @click="toggle(account)">{{ account.enabled ? '已启用' : '已停用' }}</button>
+          <div>
+            <b>{{ account.username }}</b>
+            <small>{{ account.role === 'admin' ? '管理员' : '普通用户' }}{{ account.enabled ? '' : ' · 已停用' }}</small>
+          </div>
+          <button type="button" class="text-button" @click="openResetPassword(account)">改密</button>
+          <button type="button" class="text-button" @click="toggle(account)">{{ account.enabled ? '已启用' : '已停用' }}</button>
         </article>
       </section>
     </div>
 
     <div v-if="editing" class="modal-mask" @click.self="closeEdit">
       <section class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-title">
-        <div class="modal-heading"><h2 id="edit-title">编辑机器人</h2><button class="close" title="关闭" @click="closeEdit">×</button></div>
+        <div class="modal-heading"><h2 id="edit-title">编辑机器人</h2><button type="button" class="close" title="关闭" @click="closeEdit">×</button></div>
         <p>{{ editing.name }}</p>
         <form @submit.prevent="saveEdit">
           <label>服务器地址<input v-model.trim="editAddress"></label>
           <label>机器人名称<input v-model.trim="editNickname"></label>
           <label>服务器密码（留空则不设密码）<input v-model="editPassword" type="password"></label>
-          <div class="modal-actions"><button type="button" class="secondary" @click="closeEdit">取消</button><button>保存并重新连接</button></div>
+          <div class="modal-actions"><button type="button" class="secondary" @click="closeEdit">取消</button><button type="submit">保存并重新连接</button></div>
+        </form>
+      </section>
+    </div>
+
+    <div v-if="passwordModal" class="modal-mask" @click.self="closePasswordModal">
+      <section class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="pwd-title">
+        <div class="modal-heading">
+          <h2 id="pwd-title">{{ passwordModal.mode === 'own' ? '修改我的密码' : ('修改密码 · ' + passwordModal.username) }}</h2>
+          <button type="button" class="close" title="关闭" @click="closePasswordModal">×</button>
+        </div>
+        <form @submit.prevent="submitPassword">
+          <label v-if="passwordModal.mode === 'own'">当前密码<input v-model="passwordModal.currentPassword" type="password" autocomplete="current-password"></label>
+          <label>新密码<input v-model="passwordModal.newPassword" type="password" autocomplete="new-password" placeholder="至少 8 位"></label>
+          <label>确认新密码<input v-model="passwordModal.confirmPassword" type="password" autocomplete="new-password"></label>
+          <p v-if="passwordModal.error" class="inline-error">{{ passwordModal.error }}</p>
+          <div class="modal-actions">
+            <button type="button" class="secondary" @click="closePasswordModal">取消</button>
+            <button type="submit" :disabled="accountBusy">{{ accountBusy ? '提交中…' : '保存密码' }}</button>
+          </div>
         </form>
       </section>
     </div>
@@ -108,6 +142,16 @@ export default Vue.extend({
       brandName: "波点音乐", bots: [] as Bot[], accounts: [] as Account[], error: "",
       newAddress: "", newNickname: "波点音乐", newPassword: "",
       username: "", userPassword: "", role: "user",
+      accountBusy: false, accountError: "", accountSuccess: "",
+      meUsername: "",
+      passwordModal: null as null | {
+        mode: "own" | "admin";
+        username: string;
+        currentPassword: string;
+        newPassword: string;
+        confirmPassword: string;
+        error: string;
+      },
       editing: null as Bot | null, editAddress: "", editNickname: "", editPassword: "",
       updateOpen: false, currentVersion: "", latestVersion: "", hasUpdate: false,
       servicePid: 0 as number | string, serviceBusy: false, serviceMessage: "",
@@ -124,6 +168,7 @@ export default Vue.extend({
     const user = await consoleApi<ConsoleUser>("me");
     if (user.role !== "admin") { this.$router.replace("/music"); return; }
     this.brandName = user.brandName;
+    this.meUsername = user.username;
     await this.reload();
     await this.refreshUpdate();
     await this.refreshService();
@@ -234,11 +279,88 @@ export default Vue.extend({
       });
     },
     remove(bot: Bot) { return this.run(async () => { await consoleApi("bots/delete", { id: bot.id }); await this.reload(); }); },
-    createAccount() {
-      return this.run(async () => {
-        await consoleApi("accounts", { username: this.username, password: this.userPassword, role: this.role });
-        this.username = ""; this.userPassword = ""; await this.reload();
-      });
+    async createAccount() {
+      this.accountError = "";
+      this.accountSuccess = "";
+      this.error = "";
+      const name = (this.username || "").trim();
+      const password = this.userPassword || "";
+      if (!name) { this.accountError = "请填写账号。"; return; }
+      if (password.length < 8) { this.accountError = "密码至少需要 8 个字符。"; return; }
+      this.accountBusy = true;
+      try {
+        await consoleApi("accounts", { username: name, password, role: this.role });
+        this.accountSuccess = "账号「" + name + "」已创建。";
+        this.username = "";
+        this.userPassword = "";
+        this.role = "user";
+        await this.reload();
+      } catch (error) {
+        this.accountError = error instanceof Error ? error.message : "创建账号失败。";
+        this.error = this.accountError;
+      } finally {
+        this.accountBusy = false;
+      }
+    },
+    openOwnPassword() {
+      this.passwordModal = {
+        mode: "own",
+        username: this.meUsername,
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+        error: "",
+      };
+    },
+    openResetPassword(account: Account) {
+      this.passwordModal = {
+        mode: "admin",
+        username: account.username,
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+        error: "",
+      };
+    },
+    closePasswordModal() { this.passwordModal = null; },
+    async submitPassword() {
+      if (!this.passwordModal) return;
+      const modal = this.passwordModal;
+      modal.error = "";
+      if (!modal.newPassword || modal.newPassword.length < 8) {
+        modal.error = "新密码至少需要 8 个字符。";
+        return;
+      }
+      if (modal.newPassword !== modal.confirmPassword) {
+        modal.error = "两次输入的新密码不一致。";
+        return;
+      }
+      this.accountBusy = true;
+      try {
+        if (modal.mode === "own") {
+          await consoleApi("accounts/password", {
+            currentPassword: modal.currentPassword,
+            newPassword: modal.newPassword,
+          });
+          this.accountSuccess = "密码已修改，请重新登录。";
+          this.closePasswordModal();
+          setTimeout(async () => {
+            try { await consoleApi("logout", {}); } catch (_) { /* ignore */ }
+            this.$router.replace("/");
+          }, 800);
+        } else {
+          await consoleApi("accounts/password", {
+            username: modal.username,
+            newPassword: modal.newPassword,
+          });
+          this.accountSuccess = "已修改账号「" + modal.username + "」的密码。";
+          this.closePasswordModal();
+        }
+      } catch (error) {
+        modal.error = error instanceof Error ? error.message : "修改密码失败。";
+      } finally {
+        this.accountBusy = false;
+      }
     },
     toggle(account: Account) { return this.run(async () => { await consoleApi("accounts/enabled", { username: account.username, enabled: !account.enabled }); await this.reload(); }); },
   },
@@ -301,9 +423,12 @@ article small { margin-top: 4px; color: #778595; font-size: 12px; }
 .status.connecting { background: #fff3d9; color: #9b6b10; }
 .text-button { min-width: 52px; flex: 0 0 auto; white-space: nowrap; background: #edf7f5; color: #287f74; }
 .text-button.delete { background: #fff0f1; color: #bd4d55; }
-.create-account { display: grid; grid-template-columns: 1fr 1fr 140px auto; align-items: end; gap: 10px; }
+.create-account { display: grid; grid-template-columns: 1fr 1fr 140px auto; align-items: end; gap: 10px; margin-top: 12px; }
 .create-account label { margin-top: 0; }
-.create-account button { margin-top: 0; }
+.create-account button { margin-top: 0; min-width: 96px; }
+.create-account button:disabled { opacity: .65; cursor: wait; }
+.inline-error { margin: 10px 0 0; color: #b34d57; font-size: 13px; }
+.inline-success { margin: 10px 0 0; color: #197565; font-size: 13px; }
 .error { margin-top: 18px; color: #b34d57; }
 .modal-mask { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(25,37,48,.38); }
 .edit-modal { width: 100%; max-width: 480px; padding: 24px; border-radius: 10px; background: #fff; box-shadow: 0 18px 54px rgba(20,35,45,.22); }
@@ -311,12 +436,18 @@ article small { margin-top: 4px; color: #778595; font-size: 12px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .modal-actions button { margin: 0; }
 .secondary { background: #edf1f2; color: #4c5d69; }
-@media (max-width: 1000px) { .grid { grid-template-columns: 1fr; grid-template-rows: none; } .brand-card, .new-bot-card, .bots-card, .accounts-card { grid-column-start: auto; grid-column-end: auto; grid-row: auto; } .create-account { grid-template-columns: 1fr; } .admin { padding: 28px 16px; } }
+@media (max-width: 1000px) {
+  .grid { grid-template-columns: 1fr; grid-template-rows: none; }
+  .brand-card, .new-bot-card, .bots-card, .accounts-card { grid-column-start: auto; grid-column-end: auto; grid-row: auto; }
+  .create-account { grid-template-columns: 1fr; }
+  .create-account button { width: 100%; }
+  .admin { padding: 28px 16px; }
+}
 @media (max-width: 600px) {
   .admin h1 { font-size: 27px; }
   .update-card { align-items: stretch; flex-direction: column; }
   .update-card button { width: 100%; }
-  .bots-card article { align-items: flex-start; flex-wrap: wrap; }
+  .bots-card article, .accounts-card article { align-items: flex-start; flex-wrap: wrap; }
   .status { margin-left: auto; }
 }
 </style>

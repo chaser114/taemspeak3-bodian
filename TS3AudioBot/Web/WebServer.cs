@@ -432,9 +432,46 @@ namespace TS3AudioBot.Web
 			if (path == "accounts" && account.Role == WebAccountRole.Admin && ctx.Request.Method == "GET")
 			{ await WriteJson(ctx, new { accounts = webAccounts.ListAccounts().Select(x => new { username = x.Username, role = x.Role.ToString().ToLowerInvariant(), enabled = x.Enabled }) }); return; }
 			if (path == "accounts" && account.Role == WebAccountRole.Admin && ctx.Request.Method == "POST")
-			{ var body = await ReadJson(ctx); var role = string.Equals(body.Value<string>("role"), "admin", StringComparison.OrdinalIgnoreCase) ? WebAccountRole.Admin : WebAccountRole.User; if (!webAccounts.CreateAccount(body.Value<string>("username") ?? string.Empty, body.Value<string>("password") ?? string.Empty, role, out var error)) { await WriteError(ctx, error, 400); return; } await WriteJson(ctx, new { ok = true }); return; }
+			{
+				try
+				{
+					var body = await ReadJson(ctx);
+					var role = string.Equals(body.Value<string>("role"), "admin", StringComparison.OrdinalIgnoreCase) ? WebAccountRole.Admin : WebAccountRole.User;
+					if (!webAccounts.CreateAccount(body.Value<string>("username") ?? string.Empty, body.Value<string>("password") ?? string.Empty, role, out var error))
+					{ await WriteError(ctx, error, StatusCodes.Status400BadRequest); return; }
+					await WriteJson(ctx, new { ok = true });
+				}
+				catch (JsonReaderException) { throw; }
+				catch (Exception ex) { Log.Warn(ex, "Create account failed."); await WriteError(ctx, "创建账号失败，请稍后重试。", StatusCodes.Status422UnprocessableEntity); }
+				return;
+			}
 			if (path == "accounts/enabled" && account.Role == WebAccountRole.Admin && ctx.Request.Method == "POST")
 			{ var body = await ReadJson(ctx); if (!webAccounts.SetEnabled(body.Value<string>("username") ?? string.Empty, body.Value<bool?>("enabled") ?? false, out var error)) { await WriteError(ctx, error, 400); return; } await WriteJson(ctx, new { ok = true }); return; }
+			if (path == "accounts/password" && ctx.Request.Method == "POST")
+			{
+				try
+				{
+					var body = await ReadJson(ctx);
+					var target = body.Value<string>("username")?.Trim() ?? string.Empty;
+					var newPassword = body.Value<string>("newPassword") ?? body.Value<string>("password") ?? string.Empty;
+					// Admin changing someone else's password.
+					if (!string.IsNullOrWhiteSpace(target) && !string.Equals(target, account.Username, StringComparison.OrdinalIgnoreCase))
+					{
+						if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可修改他人密码。", StatusCodes.Status403Forbidden); return; }
+						if (!webAccounts.AdminSetPassword(account.Username, target, newPassword, out var adminError))
+						{ await WriteError(ctx, adminError, StatusCodes.Status400BadRequest); return; }
+						await WriteJson(ctx, new { ok = true, message = "已修改该账号密码，对方需重新登录。" }); return;
+					}
+					// Changing own password (admin or user).
+					var currentPassword = body.Value<string>("currentPassword") ?? body.Value<string>("oldPassword") ?? string.Empty;
+					if (!webAccounts.ChangeOwnPassword(account.Username, currentPassword, newPassword, out var ownError))
+					{ await WriteError(ctx, ownError, StatusCodes.Status400BadRequest); return; }
+					await WriteJson(ctx, new { ok = true, message = "密码已修改，请重新登录。" });
+				}
+				catch (JsonReaderException) { throw; }
+				catch (Exception ex) { Log.Warn(ex, "Change password failed."); await WriteError(ctx, "修改密码失败，请稍后重试。", StatusCodes.Status422UnprocessableEntity); }
+				return;
+			}
 			if (path == "setup/bot" && ctx.Request.Method == "POST")
 			{
 				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可配置机器人。", StatusCodes.Status403Forbidden); return; }

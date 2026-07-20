@@ -149,6 +149,54 @@ namespace TS3AudioBot.Web
 			}
 		}
 
+		public bool ChangeOwnPassword(string username, string currentPassword, string newPassword, out string error)
+		{
+			username = username?.Trim() ?? string.Empty;
+			if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8) { error = "新密码至少需要 8 个字符。"; return false; }
+			if (string.Equals(currentPassword, newPassword, StringComparison.Ordinal)) { error = "新密码不能与当前密码相同。"; return false; }
+			lock (sync)
+			{
+				var account = accounts.FindById(username);
+				if (account is null || !account.Enabled) { error = "账号不存在或已停用。"; return false; }
+				if (!Verify(currentPassword, account)) { error = "当前密码不正确。"; return false; }
+				WritePassword(account, newPassword);
+				accounts.Update(account);
+				// Force re-login on other sessions after password change.
+				foreach (var session in sessions.FindAll().Where(x => string.Equals(x.Username, account.Username, StringComparison.Ordinal)).ToArray())
+					sessions.Delete(session.Id);
+				error = string.Empty;
+				return true;
+			}
+		}
+
+		public bool AdminSetPassword(string adminUsername, string targetUsername, string newPassword, out string error)
+		{
+			adminUsername = adminUsername?.Trim() ?? string.Empty;
+			targetUsername = targetUsername?.Trim() ?? string.Empty;
+			if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8) { error = "新密码至少需要 8 个字符。"; return false; }
+			lock (sync)
+			{
+				var admin = accounts.FindById(adminUsername);
+				if (admin is null || !admin.Enabled || admin.Role != WebAccountRole.Admin) { error = "仅管理员可修改他人密码。"; return false; }
+				var target = accounts.FindById(targetUsername);
+				if (target is null) { error = "目标账号不存在。"; return false; }
+				WritePassword(target, newPassword);
+				accounts.Update(target);
+				foreach (var session in sessions.FindAll().Where(x => string.Equals(x.Username, target.Username, StringComparison.Ordinal)).ToArray())
+					sessions.Delete(session.Id);
+				error = string.Empty;
+				return true;
+			}
+		}
+
+		private static void WritePassword(WebAccount account, string password)
+		{
+			var salt = new byte[16];
+			RandomNumberGenerator.Fill(salt);
+			account.Salt = Convert.ToBase64String(salt);
+			account.PasswordHash = Convert.ToBase64String(Hash(password, salt));
+		}
+
 		private static byte[] Hash(string password, byte[] salt) => new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256).GetBytes(32);
 		private static bool Verify(string password, WebAccount account) => CryptographicOperations.FixedTimeEquals(Hash(password, Convert.FromBase64String(account.Salt)), Convert.FromBase64String(account.PasswordHash));
 		private static string ToBase64Url(byte[] value) => Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');

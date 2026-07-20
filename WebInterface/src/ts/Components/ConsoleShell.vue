@@ -45,11 +45,11 @@
       <main class="shell-content"><slot/></main>
     </section>
 
-    <nav class="mobile-nav" :style="{ gridTemplateColumns: 'repeat(' + mobileNavCount + ', 1fr)' }">
+    <nav class="mobile-nav">
       <router-link to="/music" title="点歌"><i class="symbol">⌕</i><span>点歌</span></router-link>
       <router-link to="/recent" title="最近播放"><i class="symbol">↶</i><span>最近</span></router-link>
       <router-link v-if="isAdmin" to="/admin" title="管理"><i class="symbol">⚙</i><span>管理</span></router-link>
-      <button title="退出登录" @click="logout"><i class="symbol">⇥</i><span>退出</span></button>
+      <button type="button" title="退出登录" @click="logout"><i class="symbol">⇥</i><span>退出</span></button>
     </nav>
 
     <UpdatePanel :open="updateOpen" @close="updateOpen = false" @applied="onApplied"/>
@@ -80,10 +80,6 @@ export default Vue.extend({
     displayVersion(): string {
       const v = this.currentVersion || "unknown";
       return v.startsWith("v") || v.startsWith("build") ? v : ("v" + v);
-    },
-    mobileNavCount(): number {
-      // 点歌 + 最近 + 退出，管理员再加管理，避免固定 4 列空一格。
-      return this.isAdmin ? 4 : 3;
     },
   },
   async created() {
@@ -207,12 +203,12 @@ export default Vue.extend({
   .account { display: none; }
   .mobile-nav {
     position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; height: calc(58px + env(safe-area-inset-bottom));
-    display: grid; padding-bottom: env(safe-area-inset-bottom);
+    display: flex; align-items: stretch; padding-bottom: env(safe-area-inset-bottom);
     background: rgba(255,255,255,.97); border-top: 1px solid var(--console-line);
   }
   .mobile-nav a, .mobile-nav button {
-    display: grid; place-items: center; gap: 2px; border: 0; background: transparent; color: #6a7885;
-    font: inherit; font-size: 11px; text-decoration: none; cursor: pointer;
+    flex: 1 1 0; min-width: 0; display: grid; place-items: center; gap: 2px; border: 0;
+    background: transparent; color: #6a7885; font: inherit; font-size: 11px; text-decoration: none; cursor: pointer;
   }
   .mobile-nav a.router-link-active { color: var(--console-brand); }
 }
