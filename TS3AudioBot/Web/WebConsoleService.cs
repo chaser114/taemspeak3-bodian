@@ -100,9 +100,23 @@ namespace TS3AudioBot.Web
 				if (!(info.Id is int id)) continue;
 				var bot = botManager.GetBotLock(id);
 				if (bot is null) continue;
+
+				// Prefer human labels: TS nickname + server address, not internal config id.
+				var displayName = ResolveBotDisplayName(bot.Name, info.Name);
+				var server = ResolveBotServer(bot.Name, info.Server);
+				var label = string.IsNullOrWhiteSpace(server) ? displayName : $"{displayName}（{server}）";
+
 				if (info.Status != BotStatus.Connected)
 				{
-					report.Add(new { id = bot.Name, name = info.Name, connected = false, canSetDescription = (bool?)null });
+					report.Add(new
+					{
+						id = bot.Name,
+						name = displayName,
+						server,
+						label,
+						connected = false,
+						canSetDescription = (bool?)null,
+					});
 					continue;
 				}
 
@@ -112,8 +126,16 @@ namespace TS3AudioBot.Web
 				else
 					ok = bot.DescriptionPermissionOk.Value;
 
-				report.Add(new { id = bot.Name, name = info.Name ?? bot.Name, connected = true, canSetDescription = ok });
-				if (!ok) missing.Add(string.IsNullOrWhiteSpace(info.Name) ? (bot.Name ?? id.ToString()) : info.Name!);
+				report.Add(new
+				{
+					id = bot.Name,
+					name = displayName,
+					server,
+					label,
+					connected = true,
+					canSetDescription = ok,
+				});
+				if (!ok) missing.Add(label);
 			}
 
 			var needsAttention = missing.Count > 0;
@@ -121,7 +143,7 @@ namespace TS3AudioBot.Web
 			if (needsAttention)
 			{
 				var names = string.Join("、", missing);
-				message = $"机器人「{names}」当前没有修改简介的权限。请在 TeamSpeak 服务器权限里给机器人身份组勾选“修改自己的简介 / 修改客户端简介”，或将机器人加入管理员组，否则播放时简介无法显示歌名。";
+				message = $"以下机器人没有修改简介权限：{names}。请在 TeamSpeak「权限 → 服务器组」给机器人所在组勾选“修改自己的简介 / 修改客户端简介”，或加入管理员组，否则播放时简介无法显示歌名。";
 			}
 
 			return new
@@ -159,6 +181,32 @@ namespace TS3AudioBot.Web
 				? infos.FirstOrDefault()
 				: infos.FirstOrDefault(x => string.Equals(x.Name, botId, StringComparison.Ordinal));
 			return info?.Id is int id ? botManager.GetBotLock(id) : null;
+		}
+
+		private string ResolveBotDisplayName(string? configId, string? liveName)
+		{
+			if (!string.IsNullOrWhiteSpace(liveName)) return liveName.Trim();
+			if (!string.IsNullOrWhiteSpace(configId))
+			{
+				var conf = rootConfig.GetBotConfig(configId);
+				if (conf.Ok)
+				{
+					var nick = conf.Value.Connect.Name.Value;
+					if (!string.IsNullOrWhiteSpace(nick)) return nick.Trim();
+				}
+				return configId!;
+			}
+			return "未命名机器人";
+		}
+
+		private string? ResolveBotServer(string? configId, string? liveServer)
+		{
+			if (!string.IsNullOrWhiteSpace(liveServer)) return liveServer.Trim();
+			if (string.IsNullOrWhiteSpace(configId)) return null;
+			var conf = rootConfig.GetBotConfig(configId);
+			if (!conf.Ok) return null;
+			var address = conf.Value.Connect.Address.Value;
+			return string.IsNullOrWhiteSpace(address) ? null : address.Trim();
 		}
 		private static InvokerData WebInvoker(string username)
 			=> string.IsNullOrWhiteSpace(username) ? InvokerData.Anonymous : new InvokerData(TSLib.Uid.To("web:" + username));

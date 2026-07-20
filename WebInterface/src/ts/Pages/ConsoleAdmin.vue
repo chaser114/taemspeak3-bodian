@@ -23,14 +23,12 @@
         <h2>服务与日志</h2>
         <span v-if="servicePid">PID {{ servicePid }}</span>
       </div>
-      <p class="service-hint">像面板软件一样：在网页看日志、停止或重启，不必盯着服务器终端。更新后也会自动重启。</p>
       <div class="service-actions">
         <button type="button" class="secondary" :disabled="serviceBusy" @click="refreshLogs">刷新日志</button>
         <button type="button" class="secondary" :disabled="serviceBusy" @click="restartService">重启服务</button>
         <button type="button" class="danger" :disabled="serviceBusy" @click="stopService">停止服务</button>
       </div>
       <p v-if="serviceMessage" class="service-message">{{ serviceMessage }}</p>
-      <p v-if="logPath" class="log-path">日志文件：{{ logPath }}</p>
       <pre class="log-view" ref="logView">{{ logText || '暂无日志。' }}</pre>
     </section>
 
@@ -113,7 +111,7 @@ export default Vue.extend({
       editing: null as Bot | null, editAddress: "", editNickname: "", editPassword: "",
       updateOpen: false, currentVersion: "", latestVersion: "", hasUpdate: false,
       servicePid: 0 as number | string, serviceBusy: false, serviceMessage: "",
-      logText: "", logPath: "", logTimer: 0 as any,
+      logText: "", logTimer: 0 as any,
     };
   },
   computed: {
@@ -162,9 +160,8 @@ export default Vue.extend({
     },
     async refreshLogs(silent = false) {
       try {
-        const logs = await consoleApi<{ text?: string; path?: string }>("service/logs?lines=250");
+        const logs = await consoleApi<{ text?: string }>("service/logs?lines=250");
         this.logText = logs.text || "";
-        this.logPath = logs.path || "";
         this.$nextTick(() => {
           const el = this.$refs.logView as HTMLElement | undefined;
           if (el) el.scrollTop = el.scrollHeight;
@@ -269,14 +266,12 @@ export default Vue.extend({
 .service-card {
   margin-top: 16px; padding: 18px 20px; border: 1px solid #dfe6e8; border-radius: 10px; background: #fff;
 }
-.service-hint { margin: 8px 0 0; color: #778595; font-size: 13px; line-height: 1.55; }
-.service-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.service-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .service-actions button { height: 36px; padding: 0 12px; border: 0; border-radius: 8px; font: inherit; cursor: pointer; }
 .service-actions button:disabled { opacity: .6; cursor: wait; }
 .service-actions .secondary { background: #edf1f2; color: #4c5d69; }
 .service-actions .danger { background: #fff0f1; color: #bd4d55; }
 .service-message { margin: 12px 0 0; color: #197565; font-size: 13px; }
-.log-path { margin: 10px 0 0; color: #8b97a3; font-size: 12px; }
 .log-view {
   margin: 10px 0 0; max-height: 280px; overflow: auto; padding: 12px 14px;
   border-radius: 8px; background: #101820; color: #d7e2ea; font-size: 12px; line-height: 1.5;

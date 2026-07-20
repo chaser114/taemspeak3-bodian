@@ -8,7 +8,10 @@
       <p class="body">{{ message }}</p>
       <ul v-if="bots.length" class="bots">
         <li v-for="bot in bots" :key="bot.id || bot.name">
-          <b>{{ bot.name || bot.id }}</b>
+          <div class="bot-meta">
+            <b>{{ bot.label || bot.name || bot.id }}</b>
+            <small v-if="bot.server && !(bot.label && bot.label.indexOf(bot.server) >= 0)">服务器 {{ bot.server }}</small>
+          </div>
           <span v-if="bot.connected === false">未连接</span>
           <span v-else-if="bot.canSetDescription === false">缺少简介权限</span>
         </li>
@@ -29,6 +32,8 @@ import { consoleApi } from "../ConsoleApi";
 interface BotPerm {
   id?: string;
   name?: string;
+  server?: string;
+  label?: string;
   connected?: boolean;
   canSetDescription?: boolean | null;
 }
@@ -124,6 +129,7 @@ header h2 {
 .bots li {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 10px;
   padding: 8px 10px;
   border-radius: 8px;
@@ -132,6 +138,9 @@ header h2 {
   font-size: 13px;
 }
 .bots li + li { margin-top: 6px; }
+.bot-meta { min-width: 0; flex: 1; }
+.bot-meta b, .bot-meta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bot-meta small { margin-top: 3px; color: #a07a20; font-size: 11px; }
 .hint {
   margin: 14px 0 0;
   color: #778595;

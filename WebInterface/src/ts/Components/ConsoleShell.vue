@@ -45,7 +45,7 @@
       <main class="shell-content"><slot/></main>
     </section>
 
-    <nav class="mobile-nav">
+    <nav class="mobile-nav" :style="{ gridTemplateColumns: 'repeat(' + mobileNavCount + ', 1fr)' }">
       <router-link to="/music" title="点歌"><i class="symbol">⌕</i><span>点歌</span></router-link>
       <router-link to="/recent" title="最近播放"><i class="symbol">↶</i><span>最近</span></router-link>
       <router-link v-if="isAdmin" to="/admin" title="管理"><i class="symbol">⚙</i><span>管理</span></router-link>
@@ -80,6 +80,10 @@ export default Vue.extend({
     displayVersion(): string {
       const v = this.currentVersion || "unknown";
       return v.startsWith("v") || v.startsWith("build") ? v : ("v" + v);
+    },
+    mobileNavCount(): number {
+      // 点歌 + 最近 + 退出，管理员再加管理，避免固定 4 列空一格。
+      return this.isAdmin ? 4 : 3;
     },
   },
   async created() {
@@ -203,7 +207,7 @@ export default Vue.extend({
   .account { display: none; }
   .mobile-nav {
     position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; height: calc(58px + env(safe-area-inset-bottom));
-    display: grid; grid-template-columns: repeat(4, 1fr); padding-bottom: env(safe-area-inset-bottom);
+    display: grid; padding-bottom: env(safe-area-inset-bottom);
     background: rgba(255,255,255,.97); border-top: 1px solid var(--console-line);
   }
   .mobile-nav a, .mobile-nav button {
