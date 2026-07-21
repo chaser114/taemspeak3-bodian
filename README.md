@@ -232,4 +232,4 @@ private const string ApiUrl = "https://api.xcvts.cn/api/music/bdyy";
 ## 声明
 
 - 本插件由 ChatGPT 协助开发，主要用于个人使用。
-- 音乐与歌词使用波点接口 `https://api.xcvts.cn/api/music/bdyy`（搜索 / 播放 / 歌词二合一）。
+- 音乐与歌词使用[小尘API](https://api.xcvts.cn/)。
