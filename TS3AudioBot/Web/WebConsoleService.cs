@@ -30,7 +30,7 @@ namespace TS3AudioBot.Web
 		public async Task<object> GetState(string? botId = null)
 		{
 			var bot = GetBot(botId);
-			if (bot is null) return new { configured = rootConfig.GetAllBots()?.Length > 0, connected = false, current = (object?)null, queue = Array.Empty<object>(), recent = Array.Empty<object>() };
+			if (bot is null) return new { configured = rootConfig.GetAllBots()?.Length > 0, connected = false, current = (object?)null, queue = Array.Empty<object>(), recent = Array.Empty<object>(), volume = 0f, loop = "off", random = false };
 			var connected = bot.GetInfo().Status == BotStatus.Connected;
 			return await bot.Scheduler.InvokeAsync<object>(() =>
 			{
@@ -42,7 +42,20 @@ namespace TS3AudioBot.Web
 				var history = bot.Injector.TryGet<HistoryManager>(out var historyManager)
 					? historyManager.Search(new SeachQuery { MaxResults = 8 }).Select(x => Track(x.AudioResource, false)).ToArray()
 					: Array.Empty<object>();
-				return Task.FromResult<object>(new { configured = true, connected, current = current is null ? null : Track(current.ResourceData, true), paused = player.Paused, position = player.Position?.TotalSeconds ?? 0, length = player.Length?.TotalSeconds ?? 0, queue, recent = history });
+				return Task.FromResult<object>(new
+				{
+					configured = true,
+					connected,
+					current = current is null ? null : Track(current.ResourceData, true),
+					paused = player.Paused,
+					position = player.Position?.TotalSeconds ?? 0,
+					length = player.Length?.TotalSeconds ?? 0,
+					volume = player.Volume,
+					loop = LoopToString(playlist.Loop),
+					random = playlist.Random,
+					queue,
+					recent = history,
+				});
 			});
 		}
 
@@ -75,6 +88,35 @@ namespace TS3AudioBot.Web
 
 		public Task Clear(string? botId = null)
 			=> OnBot(string.Empty, botId, (playManager, player, playlist) => { playManager.ClearQueue(); return Task.CompletedTask; });
+
+		public Task SetVolume(float volume, string? botId = null)
+			=> OnBot(string.Empty, botId, (playManager, player, playlist) =>
+			{
+				// Web console: allow full 0-100 without the interactive TS confirm flow.
+				if (float.IsNaN(volume) || float.IsInfinity(volume))
+					throw new ArgumentException("音量无效。");
+				player.Volume = Math.Max(0f, Math.Min(100f, volume));
+				return Task.CompletedTask;
+			});
+
+		public Task SetLoop(string mode, string? botId = null)
+			=> OnBot(string.Empty, botId, (playManager, player, playlist) =>
+			{
+				playlist.Loop = ParseLoop(mode);
+				// Single-track loop is clearer with sequential order.
+				if (playlist.Loop == LoopMode.One)
+					playlist.Random = false;
+				return Task.CompletedTask;
+			});
+
+		public Task SetRandom(bool enabled, string? botId = null)
+			=> OnBot(string.Empty, botId, (playManager, player, playlist) =>
+			{
+				playlist.Random = enabled;
+				if (enabled && playlist.Loop == LoopMode.One)
+					playlist.Loop = LoopMode.All;
+				return Task.CompletedTask;
+			});
 
 		public async Task<object> GetLyrics(string? botId = null)
 		{
@@ -321,5 +363,35 @@ namespace TS3AudioBot.Web
 			coverUrl = resource.Get("cover_url"),
 			active,
 		};
+
+		private static string LoopToString(LoopMode mode) => mode switch
+		{
+			LoopMode.One => "one",
+			LoopMode.All => "all",
+			_ => "off",
+		};
+
+		private static LoopMode ParseLoop(string? mode)
+		{
+			if (string.IsNullOrWhiteSpace(mode)) return LoopMode.Off;
+			switch (mode.Trim().ToLowerInvariant())
+			{
+				case "one":
+				case "single":
+				case "track":
+					return LoopMode.One;
+				case "all":
+				case "queue":
+				case "list":
+					return LoopMode.All;
+				case "off":
+				case "none":
+				case "order":
+				case "sequential":
+					return LoopMode.Off;
+				default:
+					throw new ArgumentException("循环模式无效，可选：off / one / all。");
+			}
+		}
 	}
 }

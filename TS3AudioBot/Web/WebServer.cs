@@ -428,6 +428,41 @@ namespace TS3AudioBot.Web
 			if (path == "music/previous" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.Previous(account.Username, body.Value<string>("botId"))); return; }
 			if (path == "music/pause" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.TogglePause(body.Value<string>("botId"))); return; }
 			if (path == "music/clear" && ctx.Request.Method == "POST") { if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "只有管理员可以清空待播队列。", 403); return; } var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.Clear(body.Value<string>("botId"))); return; }
+			if (path == "music/volume" && ctx.Request.Method == "POST")
+			{
+				try
+				{
+					var body = await ReadJson(ctx);
+					var volume = body.Value<float?>("volume") ?? body.Value<float?>("value");
+					if (volume is null) { await WriteError(ctx, "请提供音量 0-100。", StatusCodes.Status400BadRequest); return; }
+					await ExecuteMusic(ctx, () => console.SetVolume(volume.Value, body.Value<string>("botId")));
+				}
+				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
+				catch (Exception ex) { Log.Warn(ex, "Console volume set failed."); await WriteError(ctx, "设置音量失败。", StatusCodes.Status422UnprocessableEntity); }
+				return;
+			}
+			if (path == "music/loop" && ctx.Request.Method == "POST")
+			{
+				try
+				{
+					var body = await ReadJson(ctx);
+					await ExecuteMusic(ctx, () => console.SetLoop(body.Value<string>("mode") ?? "off", body.Value<string>("botId")));
+				}
+				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
+				catch (Exception ex) { Log.Warn(ex, "Console loop set failed."); await WriteError(ctx, "设置循环模式失败。", StatusCodes.Status422UnprocessableEntity); }
+				return;
+			}
+			if (path == "music/random" && ctx.Request.Method == "POST")
+			{
+				try
+				{
+					var body = await ReadJson(ctx);
+					var enabled = body.Value<bool?>("enabled") ?? body.Value<bool?>("value") ?? false;
+					await ExecuteMusic(ctx, () => console.SetRandom(enabled, body.Value<string>("botId")));
+				}
+				catch (Exception ex) { Log.Warn(ex, "Console random set failed."); await WriteError(ctx, "设置随机播放失败。", StatusCodes.Status422UnprocessableEntity); }
+				return;
+			}
 			if (path == "settings/brand" && ctx.Request.Method == "POST")
 			{
 				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可修改品牌名称。", StatusCodes.Status403Forbidden); return; }

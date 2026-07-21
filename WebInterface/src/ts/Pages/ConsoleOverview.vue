@@ -41,7 +41,18 @@
         <p v-if="!state.recent.length">还没有播放记录。</p>
       </section>
 
-      <ConsolePlayerBar :state="state" :busy="busy" :bot-id="botId" @previous="control('previous')" @pause="control('pause')" @next="control('next')" @queue="queueOpen = true"/>
+      <ConsolePlayerBar
+        :state="state"
+        :busy="busy"
+        :bot-id="botId"
+        @previous="control('previous')"
+        @pause="control('pause')"
+        @next="control('next')"
+        @queue="queueOpen = true"
+        @volume="setVolume"
+        @loop="setLoop"
+        @random="setRandom"
+      />
       <ConsoleQueueDrawer :open="queueOpen" :queue="state.queue" :is-admin="isAdmin" @close="queueOpen = false" @clear="clear"/>
     </template>
   </main>
@@ -53,7 +64,7 @@ import { consoleApi, ConsoleUser, MusicState, TrackResource, ConsoleBot } from "
 import ConsolePlayerBar from "../Components/ConsolePlayerBar.vue";
 import ConsoleQueueDrawer from "../Components/ConsoleQueueDrawer.vue";
 
-const blank: MusicState = { configured: false, connected: false, current: null, queue: [], recent: [] };
+const blank: MusicState = { configured: false, connected: false, current: null, queue: [], recent: [], volume: 50, loop: "off", random: false };
 
 export default Vue.extend({
   components: { ConsolePlayerBar, ConsoleQueueDrawer },
@@ -178,6 +189,32 @@ export default Vue.extend({
     clear() {
       this.queueOpen = false;
       return this.call("music/clear");
+    },
+    setVolume(volume: number) {
+      const value = Math.max(0, Math.min(100, Number(volume) || 0));
+      return this.call("music/volume", { volume: value, botId: this.botId }, () => {
+        this.state = { ...this.state, volume: value };
+      });
+    },
+    setLoop(mode: string) {
+      const next = mode === "one" || mode === "all" ? mode : "off";
+      return this.call("music/loop", { mode: next, botId: this.botId }, () => {
+        this.state = {
+          ...this.state,
+          loop: next,
+          random: next === "one" ? false : this.state.random,
+        };
+      });
+    },
+    setRandom(enabled: boolean) {
+      const value = !!enabled;
+      return this.call("music/random", { enabled: value, botId: this.botId }, () => {
+        this.state = {
+          ...this.state,
+          random: value,
+          loop: value && this.state.loop === "one" ? "all" : this.state.loop,
+        };
+      });
     },
   },
 });

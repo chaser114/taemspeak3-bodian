@@ -36,6 +36,16 @@
       <small>{{ time(livePosition) }} / {{ time(state.length || 0) }}</small>
     </div>
 
+    <div class="mode-volume" aria-label="播放模式与音量">
+      <button type="button" class="mode-button" :title="loopTitle" :aria-label="loopTitle" :disabled="busy" @click="cycleLoop">{{ loopIcon }}</button>
+      <button type="button" class="mode-button" :class="{ on: !!state.random }" title="随机播放" aria-label="随机播放" :disabled="busy" @click="toggleRandom">⧉</button>
+      <label class="volume" :title="'音量 ' + Math.round(localVolume)">
+        <span>♪</span>
+        <input type="range" min="0" max="100" step="1" :value="localVolume" :disabled="busy" @input="onVolumeInput" @change="onVolumeCommit">
+        <em>{{ Math.round(localVolume) }}</em>
+      </label>
+    </div>
+
     <button type="button" class="queue-button" title="待播队列" aria-label="待播队列" @click="$emit('queue')">
       ☷<em v-if="state.queue.length">{{ state.queue.length }}</em>
     </button>
@@ -67,10 +77,15 @@ export default Vue.extend({
       lyricLines: [] as LyricLine[],
       lyricsLoading: false,
       lyricsTrackKey: "",
+      localVolume: 50,
+      volumeTimer: 0 as any,
     };
   },
   mounted() { this.frameId = requestAnimationFrame(() => this.tick()); },
-  beforeDestroy() { cancelAnimationFrame(this.frameId); },
+  beforeDestroy() {
+    cancelAnimationFrame(this.frameId);
+    if (this.volumeTimer) clearTimeout(this.volumeTimer);
+  },
   watch: {
     state: {
       immediate: true,
@@ -83,6 +98,9 @@ export default Vue.extend({
         this.serverPosition = nextPosition;
         this.syncedAt = Date.now();
         this.trackKey = nextTrackKey;
+        if (typeof state.volume === "number" && !this.volumeTimer) {
+          this.localVolume = Math.max(0, Math.min(100, state.volume));
+        }
 
         if (trackChanged) {
           this.renderedPosition = nextPosition;
@@ -133,6 +151,20 @@ export default Vue.extend({
     pauseTitle(): string {
       if (!this.state.current) return "暂无可播放歌曲";
       return this.state.paused ? "继续播放" : "暂停播放";
+    },
+    loopMode(): string {
+      const mode = (this.state.loop || "off").toLowerCase();
+      return mode === "one" || mode === "all" ? mode : "off";
+    },
+    loopIcon(): string {
+      if (this.loopMode === "one") return "①";
+      if (this.loopMode === "all") return "∞";
+      return "→";
+    },
+    loopTitle(): string {
+      if (this.loopMode === "one") return "单曲循环";
+      if (this.loopMode === "all") return "列表循环";
+      return "顺序播放";
     },
     activeLyricIndex(): number {
       if (!this.lyricLines.length) return -1;
@@ -198,6 +230,33 @@ export default Vue.extend({
     time(seconds: number) {
       return Math.floor(seconds / 60) + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
     },
+    onVolumeInput(event: Event) {
+      const value = Number((event.target as HTMLInputElement).value);
+      this.localVolume = value;
+      if (this.volumeTimer) clearTimeout(this.volumeTimer);
+      this.volumeTimer = setTimeout(() => {
+        this.volumeTimer = 0;
+        this.$emit("volume", value);
+      }, 120);
+    },
+    onVolumeCommit(event: Event) {
+      const value = Number((event.target as HTMLInputElement).value);
+      this.localVolume = value;
+      if (this.volumeTimer) {
+        clearTimeout(this.volumeTimer);
+        this.volumeTimer = 0;
+      }
+      this.$emit("volume", value);
+    },
+    cycleLoop() {
+      const order = ["off", "all", "one"];
+      const current = this.loopMode;
+      const next = order[(order.indexOf(current) + 1) % order.length];
+      this.$emit("loop", next);
+    },
+    toggleRandom() {
+      this.$emit("random", !this.state.random);
+    },
   },
 });
 </script>
@@ -221,6 +280,23 @@ button { border: 0; background: transparent; cursor: pointer; }
 .progress-track { height: 4px; flex: 1; overflow: hidden; border-radius: 4px; background: #dfe6e8; }
 .progress-track i { display: block; width: 100%; height: 100%; background: #4fb8a8; transform-origin: left center; will-change: transform; transition: transform .08s linear; }
 .timeline small { color: #83909d; font-size: 12px; white-space: nowrap; }
+.mode-volume { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.mode-button {
+  width: 34px; height: 34px; border-radius: 50%; color: #526b75; font-size: 15px; font-weight: 700;
+  transition: background .18s ease, color .18s ease, transform .18s ease;
+}
+.mode-button:hover:not(:disabled) { background: #edf7f5; color: #257e73; }
+.mode-button.on { background: #e4f7f1; color: #197565; }
+.mode-button:disabled { opacity: .55; cursor: wait; }
+.volume {
+  display: flex; align-items: center; gap: 6px; min-width: 120px; color: #6a7885; font-size: 12px;
+}
+.volume span { width: 16px; text-align: center; color: #4fb8a8; }
+.volume input[type="range"] {
+  width: 84px; height: 4px; padding: 0; border: 0; border-radius: 4px; background: #dfe6e8; accent-color: #4fb8a8; cursor: pointer;
+}
+.volume input[type="range"]:disabled { opacity: .55; cursor: wait; }
+.volume em { min-width: 24px; font-style: normal; color: #83909d; text-align: right; }
 .queue-button { position: relative; width: 42px; height: 42px; border-radius: 50%; color: #526b75; font-size: 22px; transition: background .18s ease, color .18s ease, transform .18s cubic-bezier(.22,.61,.36,1); }
 .queue-button:hover { background: #edf7f5; color: #257e73; transform: translateY(-2px); }
 .queue-button:active { transform: scale(.9); }
@@ -251,6 +327,8 @@ button { border: 0; background: transparent; cursor: pointer; }
 }
 .expanded .controls { margin-top: 4px; }
 .expanded .timeline { width: 100%; max-width: 620px; flex: none; }
+.expanded .mode-volume { width: 100%; max-width: 620px; justify-content: center; }
+.expanded .volume input[type="range"] { width: 140px; }
 .expanded .queue-button { margin-top: 0; }
 .back-button { position: absolute; top: 24px; left: 30px; color: #287f74; font-size: 16px; transition: color .18s ease, transform .18s cubic-bezier(.22,.61,.36,1); }
 .back-button:hover { color: #185d55; transform: translateX(-3px); }
@@ -263,9 +341,17 @@ button { border: 0; background: transparent; cursor: pointer; }
   .controls button { width: 31px; height: 31px; font-size: 15px; }
   .controls .play-button { width: 42px; height: 42px; }
   .timeline { display: none; }
+  .mode-volume { gap: 4px; }
+  .mode-button { width: 30px; height: 30px; font-size: 13px; }
+  .volume { min-width: 0; }
+  .volume input[type="range"] { width: 56px; }
+  .volume em { display: none; }
   .player-bar.expanded { left: 0; bottom: calc(58px + env(safe-area-inset-bottom)); height: calc(100vh - 58px - env(safe-area-inset-bottom)); padding: 48px 16px 18px; }
   .expanded .track-summary img, .expanded .cover-placeholder { width: 56px; height: 56px; flex-basis: 56px; }
   .expanded .timeline { display: flex; width: 100%; max-width: 430px; }
+  .expanded .mode-volume { width: 100%; max-width: 430px; }
+  .expanded .volume em { display: inline; }
+  .expanded .volume input[type="range"] { width: 120px; }
   .lyrics-scroll { padding: 24vh 12px; }
   .lyrics-line { font-size: 15px; }
   .lyrics-line.active { font-size: 18px; }
