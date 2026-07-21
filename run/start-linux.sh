@@ -13,8 +13,12 @@ if [ ! -s "$repo/WebInterface/index.html" ] || [ ! -s "$repo/WebInterface/bundle
 	exit 1
 fi
 
-if command -v apt-get >/dev/null 2>&1; then
+# Install + verify ffmpeg/libopus. Creates local lib/libopus.so* symlinks for the bot loader.
+if [ -f "$repo/packaging/common/ensure-linux-deps.sh" ]; then
+	sh "$repo/packaging/common/ensure-linux-deps.sh" "$repo"
+elif command -v apt-get >/dev/null 2>&1; then
 	if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
+	export DEBIAN_FRONTEND=noninteractive
 	$SUDO apt-get update
 	$SUDO apt-get install -y ffmpeg libopus0
 fi
@@ -30,6 +34,9 @@ else
 fi
 
 chmod +x "$repo/TS3AudioBot"
+# Help native loader find local symlinks even when CWD is data/.
+export LD_LIBRARY_PATH="$repo/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
 # Record PID for stop scripts; keep process in foreground so Ctrl+C still works.
 cd "$repo/data"
 "$repo/TS3AudioBot" --config ts3audiobot.toml --non-interactive "$@" &

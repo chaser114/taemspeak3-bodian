@@ -7,6 +7,10 @@ if [ ! -s "./WebInterface/index.html" ] || [ ! -s "./WebInterface/bundle.js" ] |
 	exit 1
 fi
 
+if [ -f "./packaging/common/ensure-linux-deps.sh" ]; then
+	sh "./packaging/common/ensure-linux-deps.sh" "."
+fi
+
 # Durable data dir: bots, accounts, rights. Survives package overwrite upgrades.
 if [ -f "./packaging/common/prepare-data.sh" ]; then
 	sh "./packaging/common/prepare-data.sh" "." >/dev/null
@@ -18,6 +22,7 @@ else
 fi
 
 chmod +x ./TS3AudioBot
+export LD_LIBRARY_PATH="$(pwd)/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 # Run with CWD=data so relative bots_path / db paths stay under data/.
 # Record PID for stop scripts / web-update restarts; keep foreground so Ctrl+C works.
 cd data

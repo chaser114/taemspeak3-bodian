@@ -66,6 +66,7 @@ cp "$repo/packaging/linux/install-linux.sh" "$output_dir/install-linux.sh"
 cp "$repo/packaging/linux/README.md" "$output_dir/README.md"
 cp "$repo/packaging/common/prepare-data.sh" "$output_dir/packaging/common/prepare-data.sh"
 cp "$repo/packaging/common/update-in-place.sh" "$output_dir/packaging/common/update-in-place.sh"
+cp "$repo/packaging/common/ensure-linux-deps.sh" "$output_dir/packaging/common/ensure-linux-deps.sh"
 cp "$repo/run/start-linux.sh" "$output_dir/run/start-linux.sh"
 cp "$repo/run/update-linux.sh" "$output_dir/run/update-linux.sh"
 cp "$repo/run/stop-linux.sh" "$output_dir/run/stop-linux.sh"
@@ -75,7 +76,8 @@ printf '%s\n' "This folder stores bots, web accounts and rights. Keep it when up
 
 chmod +x "$output_dir/TS3AudioBot" "$output_dir/start.sh" "$output_dir/install-linux.sh" \
 	"$output_dir/run/start-linux.sh" "$output_dir/run/update-linux.sh" "$output_dir/run/stop-linux.sh" \
-	"$output_dir/packaging/common/prepare-data.sh" "$output_dir/packaging/common/update-in-place.sh"
+	"$output_dir/packaging/common/prepare-data.sh" "$output_dir/packaging/common/update-in-place.sh" \
+	"$output_dir/packaging/common/ensure-linux-deps.sh"
 test -x "$output_dir/TS3AudioBot"
 test -x "$output_dir/run/start-linux.sh"
 test -x "$output_dir/run/update-linux.sh"
