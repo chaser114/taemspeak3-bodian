@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using TS3AudioBot.Audio;
 using TS3AudioBot.Config;
 using TS3AudioBot.Dependency;
+using TS3AudioBot.Helper;
 using TS3AudioBot.History;
 using TS3AudioBot.Playlists;
 using TS3AudioBot.ResourceFactories;
@@ -73,6 +75,107 @@ namespace TS3AudioBot.Web
 
 		public Task Clear(string? botId = null)
 			=> OnBot(string.Empty, botId, (playManager, player, playlist) => { playManager.ClearQueue(); return Task.CompletedTask; });
+
+		public async Task<object> GetLyrics(string? botId = null)
+		{
+			var bot = GetBot(botId);
+			if (bot is null)
+				return new { available = false, lrc = (string?)null, lines = Array.Empty<object>(), title = (string?)null };
+
+			var resource = await bot.Scheduler.InvokeAsync(() =>
+			{
+				var playManager = bot.Injector.GetModuleOrThrow<PlayManager>();
+				return Task.FromResult(playManager.CurrentPlayData?.ResourceData);
+			});
+			if (resource is null)
+				return new { available = false, lrc = (string?)null, lines = Array.Empty<object>(), title = (string?)null };
+
+			// Prefer LRC cached on the resource from the same detail API call (play_url + lrc).
+			var lrc = resource.Get("lrc");
+			if (string.IsNullOrWhiteSpace(lrc))
+			{
+				try { lrc = await FetchBdyyLyricsAsync(resource); }
+				catch { lrc = null; }
+			}
+
+			var lines = ParseLrc(lrc);
+			return new
+			{
+				available = lines.Count > 0,
+				lrc,
+				title = resource.ResourceTitle,
+				resid = resource.ResourceId,
+				lines = lines.Select(x => new { time = x.time, text = x.text }).ToArray(),
+			};
+		}
+
+		// Same 波点 API used by the plugin; detail call returns lrc with play_url.
+		private const string LyricsApiUrl = "https://api.xcvts.cn/api/music/bdyy";
+
+		private static async Task<string?> FetchBdyyLyricsAsync(AudioResource resource)
+		{
+			var query = resource.Get("query");
+			var selectionText = resource.Get("selection");
+			if (string.IsNullOrWhiteSpace(query))
+			{
+				query = resource.ResourceTitle;
+				if (string.IsNullOrWhiteSpace(query)) return null;
+				var dash = query.IndexOf(" - ", StringComparison.Ordinal);
+				if (dash > 0) query = query.Substring(0, dash);
+			}
+			if (!int.TryParse(selectionText, NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 1)
+				number = 1;
+
+			var url = $"{LyricsApiUrl}?msg={Uri.EscapeDataString(query.Trim())}&n={number.ToString(CultureInfo.InvariantCulture)}&type=json";
+			var response = await WebWrapper.Request(url).AsJson<BdyyLyricsResponse>();
+			if (response is null || response.code != 200 || response.data is null)
+				return null;
+			return string.IsNullOrWhiteSpace(response.data.lrc) ? null : response.data.lrc;
+		}
+
+		private static List<(double time, string text)> ParseLrc(string? lrc)
+		{
+			var result = new List<(double time, string text)>();
+			if (string.IsNullOrWhiteSpace(lrc)) return result;
+			var normalized = lrc.Replace("\r\n", "\n").Replace('\r', '\n');
+			foreach (var raw in normalized.Split('\n'))
+			{
+				var line = raw.Trim();
+				if (line.Length == 0) continue;
+				var matches = System.Text.RegularExpressions.Regex.Matches(line, @"\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]");
+				if (matches.Count == 0) continue;
+				var textStart = matches[matches.Count - 1].Index + matches[matches.Count - 1].Length;
+				var text = textStart < line.Length ? line.Substring(textStart).Trim() : string.Empty;
+				if (string.IsNullOrWhiteSpace(text)) continue;
+				foreach (System.Text.RegularExpressions.Match m in matches)
+				{
+					if (!int.TryParse(m.Groups[1].Value, out var min)) continue;
+					if (!int.TryParse(m.Groups[2].Value, out var sec)) continue;
+					var frac = 0.0;
+					if (m.Groups[3].Success)
+					{
+						var ms = m.Groups[3].Value;
+						if (ms.Length == 1) ms += "00";
+						else if (ms.Length == 2) ms += "0";
+						if (ms.Length > 3) ms = ms.Substring(0, 3);
+						if (int.TryParse(ms, out var milli)) frac = milli / 1000.0;
+					}
+					result.Add((min * 60 + sec + frac, text));
+				}
+			}
+			return result.OrderBy(x => x.time).ToList();
+		}
+
+		private sealed class BdyyLyricsResponse
+		{
+			public int code { get; set; }
+			public BdyyLyricsData? data { get; set; }
+		}
+
+		private sealed class BdyyLyricsData
+		{
+			public string? lrc { get; set; }
+		}
 
 		/// <summary>
 		/// Admin-only health check: whether bots can write their TeamSpeak description.

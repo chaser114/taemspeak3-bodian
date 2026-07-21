@@ -1,20 +1,34 @@
 <template>
   <section :class="['player-bar', { expanded }]">
-    <button v-if="expanded" class="back-button" title="返回播放器" @click="expanded = false">‹ 返回</button>
+    <button v-if="expanded" type="button" class="back-button" title="返回播放器" @click="expanded = false">‹ 返回</button>
 
-    <button class="track-summary" title="打开完整播放器" @click="expanded = !expanded">
+    <button type="button" class="track-summary" title="打开完整播放器" @click="expanded = !expanded">
       <img v-if="state.current && state.current.coverUrl" :src="state.current.coverUrl" :alt="trackTitle">
       <span v-else class="cover-placeholder">♫</span>
       <span class="track-copy">
         <b>{{ trackTitle }}</b>
-        <small>{{ state.current ? '正在频道中播放' : '搜索后即可加入待播' }}</small>
+        <small>{{ state.current ? (expanded ? '点击返回' : '点击查看歌词') : '搜索后即可加入待播' }}</small>
       </span>
     </button>
 
+    <div v-if="expanded" class="lyrics-panel" ref="lyricsPanel">
+      <p v-if="lyricsLoading" class="lyrics-empty">歌词加载中…</p>
+      <p v-else-if="!state.current" class="lyrics-empty">暂无播放</p>
+      <p v-else-if="!lyricLines.length" class="lyrics-empty">暂无歌词</p>
+      <div v-else class="lyrics-scroll">
+        <p
+          v-for="(line, index) in lyricLines"
+          :key="index + '-' + line.time"
+          :class="['lyrics-line', { active: index === activeLyricIndex }]"
+          :ref="'lyric-' + index"
+        >{{ line.text }}</p>
+      </div>
+    </div>
+
     <div class="controls" aria-label="播放控制">
-      <button title="上一首" aria-label="上一首" :disabled="!canControl" @click="$emit('previous')">⏮</button>
-      <button class="play-button" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')">{{ showPlayIcon ? '▶' : 'Ⅱ' }}</button>
-      <button title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')">⏭</button>
+      <button type="button" title="上一首" aria-label="上一首" :disabled="!canControl" @click="$emit('previous')">⏮</button>
+      <button type="button" class="play-button" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')">{{ showPlayIcon ? '▶' : 'Ⅱ' }}</button>
+      <button type="button" title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')">⏭</button>
     </div>
 
     <div class="timeline">
@@ -22,7 +36,7 @@
       <small>{{ time(livePosition) }} / {{ time(state.length || 0) }}</small>
     </div>
 
-    <button class="queue-button" title="待播队列" aria-label="待播队列" @click="$emit('queue')">
+    <button type="button" class="queue-button" title="待播队列" aria-label="待播队列" @click="$emit('queue')">
       ☷<em v-if="state.queue.length">{{ state.queue.length }}</em>
     </button>
   </section>
@@ -30,12 +44,15 @@
 
 <script lang="ts">
 import Vue from "vue";
-import { MusicState } from "../ConsoleApi";
+import { consoleApi, MusicState } from "../ConsoleApi";
+
+interface LyricLine { time: number; text: string; }
 
 export default Vue.extend({
   props: {
     state: { type: Object as () => MusicState, required: true },
     busy: { type: Boolean, default: false },
+    botId: { type: String, default: "" },
   },
   data() {
     const now = Date.now();
@@ -47,6 +64,9 @@ export default Vue.extend({
       lastFrameAt: now,
       trackKey: "",
       frameId: 0 as number,
+      lyricLines: [] as LyricLine[],
+      lyricsLoading: false,
+      lyricsTrackKey: "",
     };
   },
   mounted() { this.frameId = requestAnimationFrame(() => this.tick()); },
@@ -64,9 +84,26 @@ export default Vue.extend({
         this.syncedAt = Date.now();
         this.trackKey = nextTrackKey;
 
-        // A new resource is a hard boundary; small polling drift is animated in tick().
-        if (trackChanged) this.renderedPosition = nextPosition;
+        if (trackChanged) {
+          this.renderedPosition = nextPosition;
+          if (this.expanded) this.loadLyrics();
+          else {
+            this.lyricLines = [];
+            this.lyricsTrackKey = "";
+          }
+        }
       },
+    },
+    expanded(value: boolean) {
+      if (value) this.loadLyrics();
+    },
+    activeLyricIndex(index: number) {
+      if (!this.expanded || index < 0) return;
+      this.$nextTick(() => {
+        const refs = this.$refs["lyric-" + index] as HTMLElement[] | HTMLElement | undefined;
+        const el = Array.isArray(refs) ? refs[0] : refs;
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
     },
   },
   computed: {
@@ -97,10 +134,42 @@ export default Vue.extend({
       if (!this.state.current) return "暂无可播放歌曲";
       return this.state.paused ? "继续播放" : "暂停播放";
     },
+    activeLyricIndex(): number {
+      if (!this.lyricLines.length) return -1;
+      const t = this.livePosition + 0.15;
+      let idx = 0;
+      for (let i = 0; i < this.lyricLines.length; i++) {
+        if (this.lyricLines[i].time <= t) idx = i;
+        else break;
+      }
+      return idx;
+    },
   },
   methods: {
     trackKeyFor(state: MusicState): string {
       return state.current ? state.current.type + ":" + state.current.resource.resid : "";
+    },
+    async loadLyrics() {
+      const state = this.state as MusicState;
+      if (!state.current) {
+        this.lyricLines = [];
+        this.lyricsTrackKey = "";
+        return;
+      }
+      const key = this.trackKeyFor(state);
+      if (key === this.lyricsTrackKey && this.lyricLines.length) return;
+      this.lyricsLoading = true;
+      this.lyricsTrackKey = key;
+      try {
+        const path = "music/lyrics" + (this.botId ? ("?botId=" + encodeURIComponent(this.botId)) : "");
+        const result = await consoleApi<{ available?: boolean; lines?: LyricLine[] }>(path);
+        if (this.trackKeyFor(this.state as MusicState) !== key) return;
+        this.lyricLines = (result.lines || []).filter((x) => x && x.text);
+      } catch (_) {
+        if (this.trackKeyFor(this.state as MusicState) === key) this.lyricLines = [];
+      } finally {
+        if (this.trackKeyFor(this.state as MusicState) === key) this.lyricsLoading = false;
+      }
     },
     tick() {
       const currentTime = Date.now();
@@ -118,7 +187,6 @@ export default Vue.extend({
         const target = this.serverPosition + (playing ? Math.max(0, (currentTime - this.syncedAt) / 1000) : 0);
         const drift = target - this.renderedPosition;
 
-        // Keep normal polling corrections invisible, but recover quickly from a stale snapshot.
         if (Math.abs(drift) > 3) this.renderedPosition = target;
         else this.renderedPosition += drift * (1 - Math.exp(-8 * elapsed));
 
@@ -158,13 +226,32 @@ button { border: 0; background: transparent; cursor: pointer; }
 .queue-button:active { transform: scale(.9); }
 .queue-button em { position: absolute; top: -2px; right: -2px; min-width: 17px; border-radius: 10px; background: #287f74; color: #fff; font-size: 10px; font-style: normal; }
 
-.player-bar.expanded { left: 216px; bottom: 0; height: 100vh; z-index: 10; flex-direction: column; justify-content: center; gap: 18px; padding: 52px 34px; background: #f7fbfa; box-shadow: 0 0 40px rgba(30,50,55,.12); }
-.expanded .track-summary { max-width: none; display: grid; text-align: center; }
-.expanded .track-summary img, .expanded .cover-placeholder { width: 46vw; height: 46vw; max-width: 340px; max-height: 340px; margin: auto; border-radius: 18px; }
-.expanded .track-copy small { margin-top: 8px; }
-.expanded .controls { margin-top: 16px; }
-.expanded .timeline { width: 70vw; max-width: 620px; flex: none; }
-.expanded .queue-button { margin-top: 2px; }
+.lyrics-panel { display: none; }
+.player-bar.expanded { left: 216px; bottom: 0; height: 100vh; z-index: 10; flex-direction: column; justify-content: flex-start; gap: 14px; padding: 52px 34px 28px; background: #f7fbfa; box-shadow: 0 0 40px rgba(30,50,55,.12); overflow: hidden; }
+.expanded .track-summary { max-width: none; width: 100%; justify-content: center; text-align: center; }
+.expanded .track-summary img, .expanded .cover-placeholder { width: 88px; height: 88px; flex-basis: 88px; border-radius: 14px; }
+.expanded .track-copy { text-align: left; }
+.expanded .lyrics-panel {
+  display: block; flex: 1; min-height: 0; width: 100%; max-width: 720px; margin: 0 auto;
+  overflow: hidden; border-radius: 14px; background: rgba(255,255,255,.72);
+}
+.lyrics-scroll {
+  height: 100%; overflow: auto; padding: 28vh 20px; scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+.lyrics-line {
+  margin: 0 0 14px; text-align: center; color: #8a98a5; font-size: 16px; line-height: 1.55;
+  transition: color .2s ease, transform .2s ease, font-size .2s ease, font-weight .2s ease;
+}
+.lyrics-line.active {
+  color: #1f6f66; font-size: 20px; font-weight: 700; transform: scale(1.03);
+}
+.lyrics-empty {
+  margin: 0; height: 100%; display: grid; place-items: center; color: #8a98a5; font-size: 14px;
+}
+.expanded .controls { margin-top: 4px; }
+.expanded .timeline { width: 100%; max-width: 620px; flex: none; }
+.expanded .queue-button { margin-top: 0; }
 .back-button { position: absolute; top: 24px; left: 30px; color: #287f74; font-size: 16px; transition: color .18s ease, transform .18s cubic-bezier(.22,.61,.36,1); }
 .back-button:hover { color: #185d55; transform: translateX(-3px); }
 
@@ -176,13 +263,17 @@ button { border: 0; background: transparent; cursor: pointer; }
   .controls button { width: 31px; height: 31px; font-size: 15px; }
   .controls .play-button { width: 42px; height: 42px; }
   .timeline { display: none; }
-  .player-bar.expanded { left: 0; bottom: calc(58px + env(safe-area-inset-bottom)); height: calc(100vh - 58px - env(safe-area-inset-bottom)); padding: 52px 20px 28px; }
-  .expanded .track-summary img, .expanded .cover-placeholder { width: 72vw; height: 72vw; max-width: 290px; max-height: 290px; }
+  .player-bar.expanded { left: 0; bottom: calc(58px + env(safe-area-inset-bottom)); height: calc(100vh - 58px - env(safe-area-inset-bottom)); padding: 48px 16px 18px; }
+  .expanded .track-summary img, .expanded .cover-placeholder { width: 56px; height: 56px; flex-basis: 56px; }
   .expanded .timeline { display: flex; width: 100%; max-width: 430px; }
+  .lyrics-scroll { padding: 24vh 12px; }
+  .lyrics-line { font-size: 15px; }
+  .lyrics-line.active { font-size: 18px; }
   .back-button { top: 18px; left: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .player-bar, .track-summary img, .cover-placeholder, .controls button, .queue-button, .back-button, .progress-track i { transition: none; }
+  .player-bar, .track-summary img, .cover-placeholder, .controls button, .queue-button, .back-button, .progress-track i, .lyrics-line { transition: none; }
+  .lyrics-scroll { scroll-behavior: auto; }
 }
 </style>

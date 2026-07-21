@@ -41,7 +41,7 @@
         <p v-if="!state.recent.length">还没有播放记录。</p>
       </section>
 
-      <ConsolePlayerBar :state="state" :busy="busy" @previous="control('previous')" @pause="control('pause')" @next="control('next')" @queue="queueOpen = true"/>
+      <ConsolePlayerBar :state="state" :busy="busy" :bot-id="botId" @previous="control('previous')" @pause="control('pause')" @next="control('next')" @queue="queueOpen = true"/>
       <ConsoleQueueDrawer :open="queueOpen" :queue="state.queue" :is-admin="isAdmin" @close="queueOpen = false" @clear="clear"/>
     </template>
   </main>

@@ -409,6 +409,12 @@ namespace TS3AudioBot.Web
 				await WriteJson(ctx, new { ok = true }); return;
 			}
 			if (path == "music/state") { await WriteJson(ctx, await console.GetState(ctx.Request.Query["botId"].ToString())); return; }
+			if (path == "music/lyrics")
+			{
+				try { await WriteJson(ctx, await console.GetLyrics(ctx.Request.Query["botId"].ToString())); }
+				catch (Exception ex) { Log.Warn(ex, "Console lyrics request failed."); await WriteError(ctx, "获取歌词失败。", StatusCodes.Status422UnprocessableEntity); }
+				return;
+			}
 			if (path == "music/search" && ctx.Request.Method == "POST")
 			{ try { var body = await ReadJson(ctx); await WriteJson(ctx, new { results = await console.Search(body.Value<string>("query") ?? string.Empty, body.Value<string>("botId")) }); } catch (JsonReaderException) { throw; } catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); } catch (Exception ex) { Log.Warn(ex, "Console music search failed."); await WriteError(ctx, "搜索失败，请稍后重试。", StatusCodes.Status422UnprocessableEntity); } return; }
 			if ((path == "music/play" || path == "music/add") && ctx.Request.Method == "POST")

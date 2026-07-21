@@ -193,19 +193,25 @@ NODE_OPTIONS=--openssl-legacy-provider npm run build
 
 ## 更换 API
 
-当前 API 地址只在 [KuwoMusicPlugin.cs](KuwoMusicPlugin/KuwoMusicPlugin.cs) 中定义一次：
+搜索、播放链接和歌词使用**同一个**波点音乐接口，定义在 [KuwoMusicPlugin.cs](KuwoMusicPlugin/KuwoMusicPlugin.cs)：
 
 ```csharp
-private const string ApiUrl = "https://api.xingzhige.com/API/Kuwo_BD_new/";
+private const string ApiUrl = "https://api.xcvts.cn/api/music/bdyy";
 ```
 
-接口失效时，先把这行替换成新 API 的基础地址。新接口必须支持关键词和结果序号请求；当前请求格式为：
+当前请求格式：
 
 ```text
-{ApiUrl}?name=歌曲名&n=序号
+# 搜索列表（不要带 n）
+{ApiUrl}?msg=关键词&sc=10&type=json
+
+# 选中第 n 首：同时返回 play_url 与 lrc（二合一）
+{ApiUrl}?msg=关键词&n=序号&type=json
 ```
 
-若新接口的 JSON 字段不同，在同一文件底部的 `KuwoResponse`、`KuwoSong` 和 `KuwoRaw` 中调整字段，并在 `ToResource` 内映射歌曲 ID、歌名、歌手、封面链接和可播放音频链接。不要修改 `MainCommands.cs`，`!search` 和 `!play` 已固定调用该插件。
+`n` 可选音质参数 `bf`（如 `320kmp3`、`2000kflac`）；不填默认约 320k mp3。
+
+若接口失效，只改 `ApiUrl` 这一处。若 JSON 字段变化，同步改同文件底部的 `BdyyList*` / `BdyyDetail*` 模型，以及 `ToResource` 里对 `name`、`artist`、`cover`、`play_url`、`lrc`、`detail_page` 的映射。网页歌词走 `GET /console-api/music/lyrics`，优先用播放时缓存的 `lrc`。不要改 `MainCommands.cs`，`!search` / `!play` 仍调用该插件。
 
 ## GitHub Actions
 
@@ -226,4 +232,4 @@ private const string ApiUrl = "https://api.xingzhige.com/API/Kuwo_BD_new/";
 ## 声明
 
 - 本插件由 ChatGPT 协助开发，主要用于个人使用。
-- 使用[星之阁 API](https://api.xingzhige.com/)。
+- 音乐与歌词使用波点接口 `https://api.xcvts.cn/api/music/bdyy`（搜索 / 播放 / 歌词二合一）。
