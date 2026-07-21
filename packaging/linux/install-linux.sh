@@ -7,7 +7,8 @@ elif command -v apt-get >/dev/null 2>&1; then
 	if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
 	export DEBIAN_FRONTEND=noninteractive
 	$SUDO apt-get update
-	$SUDO apt-get install -y ffmpeg libopus0
+	# libopus-dev provides libopus.so (unversioned); package name is not "libopus".
+	$SUDO apt-get install -y ffmpeg libopus0 libopus-dev
 fi
 chmod +x "$base/TS3AudioBot" "$base/start.sh"
 if [ -f "$base/run/start-linux.sh" ]; then

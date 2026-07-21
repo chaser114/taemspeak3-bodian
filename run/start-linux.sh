@@ -20,7 +20,8 @@ elif command -v apt-get >/dev/null 2>&1; then
 	if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
 	export DEBIAN_FRONTEND=noninteractive
 	$SUDO apt-get update
-	$SUDO apt-get install -y ffmpeg libopus0
+	# libopus-dev provides libopus.so (unversioned); libopus0 alone is not enough for DllImport("libopus").
+	$SUDO apt-get install -y ffmpeg libopus0 libopus-dev
 fi
 
 # Durable data dir: bots, accounts, rights. Survives package overwrite upgrades.

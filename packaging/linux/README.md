@@ -14,16 +14,20 @@ chmod +x run/start-linux.sh
 
 `run/start-linux.sh` 会：
 
-1. 安装并**校验** `ffmpeg`、`libopus0`（Debian/Ubuntu；其他发行版尽量自动装）
-2. 在包内创建 `lib/libopus.so*` 符号链接，解决“装了 libopus0 仍提示找不到 libopus”
+1. 安装并**校验** `ffmpeg`、`libopus0`、`libopus-dev`（Debian/Ubuntu）
+2. 在包内创建 `lib/libopus.so*` 符号链接（双保险）
 3. 准备 `data/` 后启动机器人
+
+说明：系统里**没有**名为 `libopus` 的包。  
+- `libopus0` 只有运行库 `libopus.so.0`  
+- 机器人按名字加载 `libopus`，需要 **`libopus-dev`** 提供的无版本号链接 `libopus.so`
 
 启动后访问 `http://服务器IP:58913`，完成网页端首次管理员设置和 TeamSpeak 连接配置。
 
 若仍提示找不到 libopus，手动执行：
 
 ```bash
-sudo apt-get install -y libopus0 ffmpeg
+sudo apt-get install -y libopus0 libopus-dev ffmpeg
 ldconfig -p | grep opus
 ./run/start-linux.sh
 ```

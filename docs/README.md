@@ -20,5 +20,5 @@ Linux 依赖：
 
 ```bash
 sudo apt update
-sudo apt install -y ffmpeg libopus0
+sudo apt install -y ffmpeg libopus0 libopus-dev
 ```

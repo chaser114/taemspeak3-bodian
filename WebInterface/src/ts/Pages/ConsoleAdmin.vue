@@ -25,8 +25,8 @@
       </div>
       <div class="service-actions">
         <button type="button" class="secondary" :disabled="serviceBusy" @click="refreshLogs">刷新日志</button>
-        <button type="button" class="secondary" :disabled="serviceBusy" @click="restartService">重启服务</button>
-        <button type="button" class="danger" :disabled="serviceBusy" @click="stopService">停止服务</button>
+        <button type="button" class="secondary" :disabled="serviceBusy" @click="openServiceConfirm('restart')">重启服务</button>
+        <button type="button" class="danger" :disabled="serviceBusy" @click="openServiceConfirm('stop')">停止服务</button>
       </div>
       <p v-if="serviceMessage" class="service-message">{{ serviceMessage }}</p>
       <pre class="log-view" ref="logView">{{ logText || '暂无日志。' }}</pre>
@@ -124,6 +124,41 @@
         </form>
       </section>
     </div>
+
+    <div v-if="serviceConfirm" class="modal-mask" @click.self="closeServiceConfirm">
+      <section class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="svc-title">
+        <div class="modal-heading">
+          <h2 id="svc-title">{{ serviceConfirm.action === 'restart' ? '重启服务' : '停止服务' }}</h2>
+          <button type="button" class="close" title="关闭" @click="closeServiceConfirm">×</button>
+        </div>
+        <p class="confirm-hint">
+          <template v-if="serviceConfirm.action === 'restart'">确认后服务会自动重启，约 10 秒后刷新网页即可。</template>
+          <template v-else>停止后网页将无法访问，需要在服务器上重新运行启动脚本。</template>
+        </p>
+        <form @submit.prevent="submitServiceConfirm">
+          <label>
+            管理员密码（二次确认）
+            <input
+              ref="servicePasswordInput"
+              v-model="serviceConfirm.password"
+              type="password"
+              autocomplete="current-password"
+              :disabled="serviceBusy"
+              placeholder="输入当前管理员密码"
+            >
+          </label>
+          <p v-if="serviceConfirm.error" class="inline-error">{{ serviceConfirm.error }}</p>
+          <div class="modal-actions">
+            <button type="button" class="secondary" :disabled="serviceBusy" @click="closeServiceConfirm">取消</button>
+            <button
+              type="submit"
+              :class="serviceConfirm.action === 'stop' ? 'danger-solid' : ''"
+              :disabled="serviceBusy || !serviceConfirm.password"
+            >{{ serviceBusy ? '处理中…' : (serviceConfirm.action === 'restart' ? '确认重启' : '确认停止') }}</button>
+          </div>
+        </form>
+      </section>
+    </div>
   </main>
 </template>
 
@@ -155,6 +190,7 @@ export default Vue.extend({
       editing: null as Bot | null, editAddress: "", editNickname: "", editPassword: "",
       updateOpen: false, currentVersion: "", latestVersion: "", hasUpdate: false,
       servicePid: 0 as number | string, serviceBusy: false, serviceMessage: "",
+      serviceConfirm: null as null | { action: "restart" | "stop"; password: string; error: string },
       logText: "", logTimer: 0 as any,
     };
   },
@@ -215,36 +251,36 @@ export default Vue.extend({
         if (!silent) this.error = error instanceof Error ? error.message : "读取日志失败。";
       }
     },
-    askPassword(actionLabel: string) {
-      const value = window.prompt("请输入管理员密码以" + actionLabel + "：", "");
-      return value == null ? null : value;
+    openServiceConfirm(action: "restart" | "stop") {
+      this.serviceMessage = "";
+      this.error = "";
+      this.serviceConfirm = { action, password: "", error: "" };
+      this.$nextTick(() => {
+        const input = this.$refs.servicePasswordInput as HTMLInputElement | undefined;
+        if (input) input.focus();
+      });
     },
-    async restartService() {
-      const password = this.askPassword("重启服务");
-      if (password === null) return;
+    closeServiceConfirm() {
+      if (this.serviceBusy) return;
+      this.serviceConfirm = null;
+    },
+    async submitServiceConfirm() {
+      if (!this.serviceConfirm || !this.serviceConfirm.password || this.serviceBusy) return;
+      const action = this.serviceConfirm.action;
+      const password = this.serviceConfirm.password;
       this.serviceBusy = true;
+      this.serviceConfirm.error = "";
       this.serviceMessage = "";
       try {
-        const result = await consoleApi<{ message?: string }>("service/restart", { password });
-        this.serviceMessage = result.message || "服务即将重启，请稍候刷新。";
-        setTimeout(() => { window.location.reload(); }, 12000);
+        const path = action === "restart" ? "service/restart" : "service/stop";
+        const result = await consoleApi<{ message?: string }>(path, { password });
+        this.serviceMessage = result.message || (action === "restart" ? "服务即将重启，请稍候刷新。" : "服务即将停止。");
+        this.serviceConfirm = null;
+        if (action === "restart") setTimeout(() => { window.location.reload(); }, 12000);
       } catch (error) {
-        this.error = error instanceof Error ? error.message : "重启失败。";
-      } finally {
-        this.serviceBusy = false;
-      }
-    },
-    async stopService() {
-      const password = this.askPassword("停止服务");
-      if (password === null) return;
-      if (!window.confirm("确定停止服务？停止后网页将无法访问，需要在服务器上重新运行启动脚本。")) return;
-      this.serviceBusy = true;
-      this.serviceMessage = "";
-      try {
-        const result = await consoleApi<{ message?: string }>("service/stop", { password });
-        this.serviceMessage = result.message || "服务即将停止。";
-      } catch (error) {
-        this.error = error instanceof Error ? error.message : "停止失败。";
+        const message = error instanceof Error ? error.message : (action === "restart" ? "重启失败。" : "停止失败。");
+        if (this.serviceConfirm) this.serviceConfirm.error = message;
+        this.error = message;
       } finally {
         this.serviceBusy = false;
       }
@@ -436,6 +472,8 @@ article small { margin-top: 4px; color: #778595; font-size: 12px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .modal-actions button { margin: 0; }
 .secondary { background: #edf1f2; color: #4c5d69; }
+.confirm-hint { margin: 0 0 12px; color: #778595; font-size: 13px; line-height: 1.55; }
+.danger-solid { background: #bd4d55; color: #fff; }
 @media (max-width: 1000px) {
   .grid { grid-template-columns: 1fr; grid-template-rows: none; }
   .brand-card, .new-bot-card, .bots-card, .accounts-card { grid-column-start: auto; grid-column-end: auto; grid-row: auto; }

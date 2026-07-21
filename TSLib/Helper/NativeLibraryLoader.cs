@@ -52,7 +52,7 @@ namespace TSLib.Helper
 				}
 				catch (DllNotFoundException ex)
 				{
-					Log.Error(ex, "Failed to load library \"{0}\". On Debian/Ubuntu install: sudo apt-get install -y libopus0", lib);
+					Log.Error(ex, "Failed to load library \"{0}\". On Debian/Ubuntu install: sudo apt-get install -y libopus0 libopus-dev (package is not named libopus)", lib);
 					return false;
 				}
 				catch (Exception ex)

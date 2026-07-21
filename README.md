@@ -143,7 +143,7 @@ chmod +x run/start-linux.sh
 ./run/start-linux.sh
 ```
 
-也可以直接运行包内的 `start.sh`。首次启动后打开网页完成管理员账号和 TeamSpeak 连接配置。启动脚本会安装并校验 `ffmpeg`、`libopus0`（Debian/Ubuntu），创建本地 `lib/libopus.so*` 链接（避免“已安装仍找不到 libopus”），并自动准备 `data/` 数据目录。
+也可以直接运行包内的 `start.sh`。首次启动后打开网页完成管理员账号和 TeamSpeak 连接配置。启动脚本会安装并校验 `ffmpeg`、`libopus0`、`libopus-dev`（Debian/Ubuntu；注意没有叫 `libopus` 的包，要用 `libopus-dev` 才能提供 `libopus.so`），并自动准备 `data/` 数据目录。
 
 ### Windows 一键部署
 

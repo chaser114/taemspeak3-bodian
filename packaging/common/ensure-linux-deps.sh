@@ -42,21 +42,24 @@ if command -v apt-get >/dev/null 2>&1; then
 	# Non-interactive installs for one-click scripts.
 	export DEBIAN_FRONTEND=noninteractive
 	$SUDO apt-get update
-	$SUDO apt-get install -y ffmpeg libopus0 || true
+	# libopus0 = runtime (libopus.so.0 only).
+	# libopus-dev = also installs the unversioned libopus.so symlink that DllImport("libopus") needs.
+	# Package name is NOT "libopus" — that name does not exist on Debian/Ubuntu.
+	$SUDO apt-get install -y ffmpeg libopus0 libopus-dev || $SUDO apt-get install -y ffmpeg libopus-dev || true
 elif command -v dnf >/dev/null 2>&1; then
 	if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
-	$SUDO dnf install -y ffmpeg opus || $SUDO dnf install -y opus || true
+	$SUDO dnf install -y ffmpeg opus opus-devel || $SUDO dnf install -y opus || true
 elif command -v yum >/dev/null 2>&1; then
 	if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
-	$SUDO yum install -y opus || true
+	$SUDO yum install -y opus opus-devel || $SUDO yum install -y opus || true
 elif command -v pacman >/dev/null 2>&1; then
 	if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
 	$SUDO pacman -Sy --noconfirm opus ffmpeg || true
 elif command -v apk >/dev/null 2>&1; then
 	if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
-	$SUDO apk add --no-cache opus ffmpeg || true
+	$SUDO apk add --no-cache opus opus-dev ffmpeg || $SUDO apk add --no-cache opus ffmpeg || true
 else
-	printf '%s\n' "No supported package manager found. Please install ffmpeg and libopus manually." >&2
+	printf '%s\n' "No supported package manager found. Please install ffmpeg and libopus (runtime + unversioned .so) manually." >&2
 fi
 
 opus_path=""
@@ -72,9 +75,10 @@ if opus_path=$(find_opus); then
 	ln -sfn "$opus_path" "./lib/libopus" 2>/dev/null || true
 else
 	printf '%s\n' "ERROR: libopus was not found after dependency install." >&2
-	printf '%s\n' "Debian/Ubuntu: sudo apt-get install -y libopus0" >&2
-	printf '%s\n' "Fedora/RHEL:   sudo dnf install -y opus" >&2
-	printf '%s\n' "Alpine:         sudo apk add opus" >&2
+	printf '%s\n' "Debian/Ubuntu: sudo apt-get install -y libopus0 libopus-dev" >&2
+	printf '%s\n' "  (use libopus-dev — there is no package named simply 'libopus')" >&2
+	printf '%s\n' "Fedora/RHEL:   sudo dnf install -y opus opus-devel" >&2
+	printf '%s\n' "Alpine:         sudo apk add opus opus-dev" >&2
 	exit 1
 fi
 

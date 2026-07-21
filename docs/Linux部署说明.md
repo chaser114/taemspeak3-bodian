@@ -14,7 +14,7 @@ chmod +x run/start-linux.sh
 ```
 
 `run/start-linux.sh` 会从脚本所在目录启动自包含的 `TS3AudioBot`，并在
-Debian/Ubuntu 上安装 `ffmpeg`、`libopus0`。也可以直接运行根目录的
+Debian/Ubuntu 上安装 `ffmpeg`、`libopus0`、`libopus-dev`（没有叫 `libopus` 的包）。也可以直接运行根目录的
 `start.sh`。首次启动后访问 `http://服务器IP:58913`，完成网页端账号和
 TeamSpeak 连接配置。
 
