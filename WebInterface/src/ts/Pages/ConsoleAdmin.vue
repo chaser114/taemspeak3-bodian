@@ -223,7 +223,7 @@ export default Vue.extend({
       try {
         const status = await consoleApi<{ currentVersion?: string }>("update/status");
         this.currentVersion = status.currentVersion || "";
-        const check = await consoleApi<{ hasUpdate?: boolean; currentVersion?: string; latestVersion?: string }>("update/check", { source: "gitcode" });
+        const check = await consoleApi<{ hasUpdate?: boolean; currentVersion?: string; latestVersion?: string }>("update/check", { source: "github-cn" });
         if (check.currentVersion) this.currentVersion = check.currentVersion;
         this.latestVersion = check.latestVersion || "";
         this.hasUpdate = !!check.hasUpdate;

@@ -295,7 +295,7 @@ namespace TS3AudioBot.Web
 						await WriteError(ctx, "管理员密码不正确。", StatusCodes.Status401Unauthorized);
 						return;
 					}
-					var source = body.Value<string>("source") ?? "gitcode";
+					var source = body.Value<string>("source") ?? "github-cn";
 					await WriteJson(ctx, await webUpdate.ApplyAsync(source, "ok"));
 				}
 				catch (Exception ex)

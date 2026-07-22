@@ -118,53 +118,29 @@ jobs:
             artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
             artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip
 
-      # Mirror packages to GitCode Releases so domestic "GitCode 更新" works without manual upload.
-      # One-time setup: GitHub repo Settings → Secrets → Actions → GITCODE_TOKEN
-      # (GitCode personal access token with repository write / release permission)
+      # Optional GitCode mirror. Overseas runners → CN/HK storage is often slow/stuck.
+      # Never block GitHub release on this step. Prefer client "github-cn" updates instead.
       - name: Mirror release to GitCode
-        # Note: GitHub Actions forbids `secrets.*` inside `if:`; check token inside the script.
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        timeout-minutes: 6
+        continue-on-error: true
         env:
-          # Prefer repository Actions secret GITCODE_TOKEN.
-          # Fallbacks help if the secret was named slightly differently.
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
-          GITCODE_TOKEN_ALT1: ${{ secrets.GITCODE_ACCESS_TOKEN }}
-          GITCODE_TOKEN_ALT2: ${{ secrets.GC_TOKEN }}
           TAG: build-${{ github.run_number }}
           OWNER_REPO: chaser114/taemspeak3-bodian
         run: |
           set -euo pipefail
-          # Resolve token from primary or alternate secret names (never print the value).
-          TOKEN="${GITCODE_TOKEN:-}"
-          TOKEN_SOURCE="GITCODE_TOKEN"
-          if [ -z "$TOKEN" ] && [ -n "${GITCODE_TOKEN_ALT1:-}" ]; then
-            TOKEN="$GITCODE_TOKEN_ALT1"
-            TOKEN_SOURCE="GITCODE_ACCESS_TOKEN"
-          fi
-          if [ -z "$TOKEN" ] && [ -n "${GITCODE_TOKEN_ALT2:-}" ]; then
-            TOKEN="$GITCODE_TOKEN_ALT2"
-            TOKEN_SOURCE="GC_TOKEN"
-          fi
-          # Trim CR/LF/spaces that sometimes sneak in when pasting secrets.
-          TOKEN=$(printf '%s' "$TOKEN" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-          export GITCODE_TOKEN="$TOKEN"
-
+          TOKEN=$(printf '%s' "${GITCODE_TOKEN:-}" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
           if [ -z "$TOKEN" ]; then
-            echo "::warning::No GitCode token found. Skip mirror."
-            echo "Expected a GitHub Actions repository secret named GITCODE_TOKEN"
-            echo "(Settings → Secrets and variables → Actions → Repository secrets)."
-            echo "Do NOT put it only on GitCode; GitHub Actions cannot read GitCode settings."
-            echo "After adding/updating the secret, re-run this workflow (new run required)."
+            echo "GITCODE_TOKEN not set; skip GitCode mirror (GitHub release is enough)."
             exit 0
           fi
-          echo "GitCode token loaded from secret: ${TOKEN_SOURCE} (length=${#TOKEN})"
-          python3 <<'PY'
-          import json
-          import os
-          import subprocess
-          import urllib.error
-          import urllib.parse
-          import urllib.request
+          echo "Attempting GitCode mirror for ${TAG} (timeout budget ~6 min)..."
+          export GITCODE_TOKEN="$TOKEN"
+          export TAG OWNER_REPO
+          # Fail soft: any hang is killed by step timeout-minutes; continue-on-error keeps pipeline green.
+          python3 -u - <<'PY'
+          import json, os, subprocess, urllib.error, urllib.parse, urllib.request, sys
 
           token = os.environ["GITCODE_TOKEN"]
           tag = os.environ["TAG"]
@@ -177,17 +153,18 @@ jobs:
               "artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip",
           ]
 
-
-          def http_json(method, url, data=None, extra_headers=None):
-              headers = {"User-Agent": ua, "Accept": "application/json", "Authorization": f"Bearer {token}"}
-              if extra_headers:
-                  headers.update(extra_headers)
+          def http_json(method, url, data=None):
+              headers = {
+                  "User-Agent": ua,
+                  "Accept": "application/json",
+                  "Authorization": f"Bearer {token}",
+              }
               raw = None if data is None else json.dumps(data).encode("utf-8")
               if raw is not None:
                   headers["Content-Type"] = "application/json"
               req = urllib.request.Request(url, data=raw, headers=headers, method=method)
               try:
-                  with urllib.request.urlopen(req, timeout=180) as resp:
+                  with urllib.request.urlopen(req, timeout=30) as resp:
                       text = resp.read().decode("utf-8", "replace")
                       return resp.status, (json.loads(text) if text else {})
               except urllib.error.HTTPError as e:
@@ -197,27 +174,24 @@ jobs:
                   except Exception:
                       obj = {"raw": text}
                   return e.code, obj
+              except Exception as e:
+                  return 0, {"error": str(e)}
 
-
-          def release_exists(tag_name):
-              # Official: GET /releases/tags/:tag  and  GET /releases/:tag
+          def release_ok(tag_name):
               for url in (
                   f"{base}/releases/tags/{urllib.parse.quote(tag_name)}",
                   f"{base}/releases/{urllib.parse.quote(tag_name)}",
-                  f"{base}/releases/tags/{urllib.parse.quote(tag_name)}?access_token={token}",
               ):
                   status, body = http_json("GET", url)
-                  if status == 200 and isinstance(body, dict) and (body.get("tag_name") or body.get("name")):
+                  if status == 200 and isinstance(body, dict) and body.get("tag_name"):
                       return True, body
               return False, {}
 
-
           def ensure_release(tag_name):
-              exists, body = release_exists(tag_name)
-              if exists:
-                  print(f"Release already exists for {tag_name}")
-                  return True, body
-
+              ok, body = release_ok(tag_name)
+              if ok:
+                  print(f"release exists: {tag_name}")
+                  return True
               payload = {
                   "tag_name": tag_name,
                   "name": f"Automated build {tag_name}",
@@ -225,172 +199,91 @@ jobs:
                   "target_commitish": "main",
                   "prerelease": False,
               }
-              print(f"Creating GitCode release {tag_name}...")
-              for url in (f"{base}/releases", f"{base}/releases?access_token={token}"):
-                  status, body = http_json("POST", url, payload)
-                  print(f"create status={status}")
-                  print(json.dumps(body, ensure_ascii=False)[:500])
-                  if status in (200, 201):
-                      return True, body
-                  # 409: already exists — treat as success and re-fetch
-                  msg = json.dumps(body, ensure_ascii=False)
-                  if status == 409 or "already exists" in msg.lower() or "已存在" in msg:
-                      ok, existing = release_exists(tag_name)
-                      if ok:
-                          return True, existing
-                      return True, body
-              return False, body
+              print(f"create release {tag_name}")
+              status, body = http_json("POST", f"{base}/releases", payload)
+              print(f"create status={status} body={json.dumps(body, ensure_ascii=False)[:300]}")
+              if status in (200, 201):
+                  return True
+              msg = json.dumps(body, ensure_ascii=False)
+              if status == 409 or "already exists" in msg.lower():
+                  return True
+              status2, body2 = http_json("POST", f"{base}/releases?access_token={token}", payload)
+              print(f"create fallback status={status2}")
+              return status2 in (200, 201, 409)
 
-
-          def get_upload_url(tag_name, file_name):
-              q = urllib.parse.urlencode({"file_name": file_name})
-              candidates = [
-                  f"{base}/releases/{urllib.parse.quote(tag_name)}/upload_url?{q}",
-                  f"{base}/releases/{urllib.parse.quote(tag_name)}/upload_url?{q}&access_token={token}",
-                  f"{base}/releases/tags/{urllib.parse.quote(tag_name)}/upload_url?{q}",
-              ]
-              for url in candidates:
-                  status, body = http_json("GET", url)
-                  print(f"upload_url status={status} for {file_name}")
-                  print(json.dumps(body, ensure_ascii=False)[:400])
-                  if status != 200:
-                      continue
-                  if isinstance(body, str) and body.startswith("http"):
-                      return body
-                  if isinstance(body, dict):
-                      for key in ("upload_url", "url", "browser_upload_url", "href", "uploadUrl"):
-                          val = body.get(key)
-                          if isinstance(val, str) and val.startswith("http"):
-                              return val
-                      # nested common shapes
-                      for nest in ("data", "result"):
-                          n = body.get(nest)
-                          if isinstance(n, dict):
-                              for key in ("upload_url", "url", "browser_upload_url", "href"):
-                                  val = n.get(key)
-                                  if isinstance(val, str) and val.startswith("http"):
-                                      return val
-                          if isinstance(n, str) and n.startswith("http"):
-                              return n
-              return None
-
-
-          def upload_file(tag_name, path):
+          def upload(path):
               name = os.path.basename(path)
-              print(f"Uploading {name}...")
-              upload_url = get_upload_url(tag_name, name)
+              print(f"upload {name}")
+              q = urllib.parse.urlencode({"file_name": name})
+              status, body = http_json("GET", f"{base}/releases/{urllib.parse.quote(tag)}/upload_url?{q}")
+              print(f"upload_url status={status} {json.dumps(body, ensure_ascii=False)[:240]}")
+              upload_url = None
+              if status == 200:
+                  if isinstance(body, str) and body.startswith("http"):
+                      upload_url = body
+                  elif isinstance(body, dict):
+                      for k in ("upload_url", "url", "browser_upload_url", "href"):
+                          v = body.get(k)
+                          if isinstance(v, str) and v.startswith("http"):
+                              upload_url = v
+                              break
+                      data = body.get("data")
+                      if not upload_url and isinstance(data, dict):
+                          for k in ("upload_url", "url", "href"):
+                              v = data.get(k)
+                              if isinstance(v, str) and v.startswith("http"):
+                                  upload_url = v
+                                  break
+                      if not upload_url and isinstance(data, str) and data.startswith("http"):
+                          upload_url = data
+              cmds = []
               if upload_url:
-                  print(f"Got upload_url for {name}")
-                  # Prefer PUT/POST raw then multipart
-                  for method in ("PUT", "POST"):
-                      cmd = [
-                          "curl", "-sS", "-o", "/tmp/gc-upload.json", "-w", "%{http_code}",
-                          "-X", method, upload_url,
-                          "-H", f"User-Agent: {ua}",
-                          "-H", f"Authorization: Bearer {token}",
-                          "-H", "Content-Type: application/octet-stream",
-                          "--data-binary", f"@{path}",
-                      ]
-                      proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
-                      code = (proc.stdout or "").strip() or "000"
-                      print(f"raw {method} {name} http={code}")
-                      try:
-                          print(open("/tmp/gc-upload.json", "r", encoding="utf-8", errors="replace").read()[:300])
-                      except Exception:
-                          pass
-                      if code in ("200", "201", "204"):
-                          return True
-
-                  # multipart against upload_url
-                  cmd = [
-                      "curl", "-sS", "-o", "/tmp/gc-upload.json", "-w", "%{http_code}",
+                  cmds.append([
+                      "curl", "-sS", "--connect-timeout", "15", "--max-time", "120",
+                      "-o", "/tmp/gc-up.json", "-w", "%{http_code}",
+                      "-X", "PUT", upload_url,
+                      "-H", f"User-Agent: {ua}",
+                      "-H", f"Authorization: Bearer {token}",
+                      "-H", "Content-Type: application/octet-stream",
+                      "--data-binary", f"@{path}",
+                  ])
+                  cmds.append([
+                      "curl", "-sS", "--connect-timeout", "15", "--max-time", "120",
+                      "-o", "/tmp/gc-up.json", "-w", "%{http_code}",
                       "-X", "POST", upload_url,
                       "-H", f"User-Agent: {ua}",
                       "-H", f"Authorization: Bearer {token}",
                       "-F", f"file=@{path}",
-                  ]
-                  proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
-                  code = (proc.stdout or "").strip() or "000"
-                  print(f"multipart upload_url {name} http={code}")
-                  try:
-                      print(open("/tmp/gc-upload.json", "r", encoding="utf-8", errors="replace").read()[:300])
-                  except Exception:
-                      pass
-                  if code in ("200", "201", "204"):
-                      return True
-
-              # Fallbacks: classic attach_files endpoints (tag-based, not numeric id)
-              for url in (
-                  f"{base}/releases/{urllib.parse.quote(tag_name)}/attach_files",
-                  f"{base}/releases/{urllib.parse.quote(tag_name)}/attach_files?access_token={token}",
-                  f"{base}/releases/tags/{urllib.parse.quote(tag_name)}/attach_files",
-                  f"{base}/releases/tags/{urllib.parse.quote(tag_name)}/attach_files?access_token={token}",
-              ):
-                  cmd = [
-                      "curl", "-sS", "-o", "/tmp/gc-upload.json", "-w", "%{http_code}",
-                      "-X", "POST", url,
-                      "-H", f"User-Agent: {ua}",
-                      "-F", f"file=@{path}",
-                  ]
-                  if "access_token=" not in url:
-                      cmd.extend(["-H", f"Authorization: Bearer {token}"])
-                  proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
-                  code = (proc.stdout or "").strip() or "000"
-                  print(f"attach_files {name} http={code} url={url.split('?')[0]}")
-                  try:
-                      print(open("/tmp/gc-upload.json", "r", encoding="utf-8", errors="replace").read()[:300])
-                  except Exception:
-                      pass
+                  ])
+              cmds.append([
+                  "curl", "-sS", "--connect-timeout", "15", "--max-time", "120",
+                  "-o", "/tmp/gc-up.json", "-w", "%{http_code}",
+                  "-X", "POST", f"{base}/releases/{urllib.parse.quote(tag)}/attach_files",
+                  "-H", f"User-Agent: {ua}",
+                  "-H", f"Authorization: Bearer {token}",
+                  "-F", f"file=@{path}",
+              ])
+              for cmd in cmds:
+                  p = subprocess.run(cmd, check=False, capture_output=True, text=True)
+                  code = (p.stdout or "").strip() or "000"
+                  print(f"  http={code}")
                   if code in ("200", "201", "204"):
                       return True
               return False
 
+          if not ensure_release(tag):
+              print("::warning::GitCode release create/find failed; skip asset upload.")
+              sys.exit(0)
 
-          def has_binary_assets(tag_name):
-              ok, body = release_exists(tag_name)
-              if not ok or not isinstance(body, dict):
-                  return False
-              assets = body.get("assets") or []
-              for a in assets:
-                  name = (a.get("name") or "").lower()
-                  typ = (a.get("type") or "").lower()
-                  if typ == "source":
-                      continue
-                  if name.endswith(".zip") or name.endswith(".tar.gz") or name.endswith(".tgz"):
-                      # exclude auto source archives named like build-44.zip
-                      if name in (f"{tag_name}.zip", f"{tag_name}.tar.gz", f"{tag_name}.tar.bz2", f"{tag_name}.tar"):
-                          continue
-                      if "windows" in name or "linux" in name or "ts3audiobot" in name or "kuwo" in name:
-                          return True
-              return False
-
-
-          ok, body = ensure_release(tag)
-          if not ok:
-              print(f"::warning::Could not create/find GitCode release {tag}.")
-              print(json.dumps(body, ensure_ascii=False)[:800])
-              raise SystemExit(0)
-
-          if has_binary_assets(tag):
-              print(f"Binary packages already present on GitCode release {tag}; skip re-upload.")
-              raise SystemExit(0)
-
-          failed = []
-          for path in files:
-              if not os.path.isfile(path):
-                  print(f"::warning::Missing local package {path}")
-                  failed.append(path)
+          ok_all = True
+          for f in files:
+              if not os.path.isfile(f):
+                  print(f"missing {f}")
+                  ok_all = False
                   continue
-              if not upload_file(tag, path):
-                  failed.append(path)
-
-          if failed:
-              print(f"::warning::Some packages failed to upload: {failed}")
-              print("Release may still only show source archives until upload succeeds.")
-              raise SystemExit(0)
-
-          print(f"GitCode mirror finished for {tag}.")
-          if not has_binary_assets(tag):
-              print("::warning::Upload calls returned success-like codes, but release assets still look like source-only.")
-              print("Check GitCode Releases page for attached Win/Linux packages.")
+              if not upload(f):
+                  print(f"::warning::upload failed for {f}")
+                  ok_all = False
+          print("GitCode mirror done" if ok_all else "GitCode mirror partial/failed (non-blocking)")
+          sys.exit(0)
           PY

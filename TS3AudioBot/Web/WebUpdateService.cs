@@ -49,8 +49,10 @@ namespace TS3AudioBot.Web
 				busy = Volatile.Read(ref busy) != 0,
 				sources = new object[]
 				{
-					new { id = "gitcode", label = "GitCode 更新（国内服务器）", defaultSource = true },
-					new { id = "github", label = "GitHub 更新（官方源）", defaultSource = false },
+					// Default domestic path: GitHub metadata + ghproxy download (no GitCode package upload needed).
+					new { id = "github-cn", label = "国内加速（GitHub 代理）", defaultSource = true },
+					new { id = "github", label = "GitHub 官方源", defaultSource = false },
+					new { id = "gitcode", label = "GitCode（需已上传安装包）", defaultSource = false },
 				}
 			};
 		}
@@ -62,21 +64,30 @@ namespace TS3AudioBot.Web
 			ReleaseInfo? gitcode = null;
 			ReleaseInfo? github = null;
 
-			try { gitcode = await FetchLatestAsync("gitcode", platform); }
-			catch (Exception ex) { errors.Add("GitCode: " + ex.Message); Log.Warn(ex, "GitCode update check failed."); }
-
 			try { github = await FetchLatestAsync("github", platform); }
 			catch (Exception ex) { errors.Add("GitHub: " + ex.Message); Log.Warn(ex, "GitHub update check failed."); }
 
+			try { gitcode = await FetchLatestAsync("gitcode", platform); }
+			catch (Exception ex) { errors.Add("GitCode: " + ex.Message); Log.Warn(ex, "GitCode update check failed."); }
+
+			// github-cn reuses GitHub release metadata, only rewrites download URL via proxy.
+			var githubCn = github is null ? null : CloneWithProxiedUrl(github);
+
 			var preferred = NormalizeSource(preferredSource);
-			var selected = preferred == "github"
-				? (github ?? gitcode)
-				: (gitcode ?? github);
-			var selectedSource = selected is null
-				? preferred
-				: (preferred == "github" && github != null ? "github"
-					: preferred == "gitcode" && gitcode != null ? "gitcode"
-					: gitcode != null && ReferenceEquals(selected, gitcode) ? "gitcode" : "github");
+			ReleaseInfo? selected = preferred switch
+			{
+				"github" => github ?? githubCn ?? gitcode,
+				"gitcode" => gitcode ?? githubCn ?? github,
+				_ => githubCn ?? github ?? gitcode, // github-cn default
+			};
+			string selectedSource;
+			if (selected is null) selectedSource = preferred;
+			else if (preferred == "github" && github != null && ReferenceEquals(selected, github)) selectedSource = "github";
+			else if (preferred == "gitcode" && gitcode != null && ReferenceEquals(selected, gitcode)) selectedSource = "gitcode";
+			else if (githubCn != null && ReferenceEquals(selected, githubCn)) selectedSource = "github-cn";
+			else if (github != null && ReferenceEquals(selected, github)) selectedSource = "github";
+			else if (gitcode != null && ReferenceEquals(selected, gitcode)) selectedSource = "gitcode";
+			else selectedSource = preferred;
 
 			var hasUpdate = selected != null && IsNewer(selected.Tag, CurrentVersion);
 			return new
@@ -94,19 +105,27 @@ namespace TS3AudioBot.Web
 				{
 					new
 					{
-						id = "gitcode",
-						label = "GitCode 更新（国内服务器）",
-						available = gitcode != null,
-						latestVersion = gitcode?.Tag,
-						hasUpdate = gitcode != null && IsNewer(gitcode.Tag, CurrentVersion),
+						id = "github-cn",
+						label = "国内加速（GitHub 代理）",
+						available = githubCn != null,
+						latestVersion = githubCn?.Tag,
+						hasUpdate = githubCn != null && IsNewer(githubCn.Tag, CurrentVersion),
 					},
 					new
 					{
 						id = "github",
-						label = "GitHub 更新（官方源）",
+						label = "GitHub 官方源",
 						available = github != null,
 						latestVersion = github?.Tag,
 						hasUpdate = github != null && IsNewer(github.Tag, CurrentVersion),
+					},
+					new
+					{
+						id = "gitcode",
+						label = "GitCode（需已上传安装包）",
+						available = gitcode != null,
+						latestVersion = gitcode?.Tag,
+						hasUpdate = gitcode != null && IsNewer(gitcode.Tag, CurrentVersion),
 					},
 				},
 				errors,
@@ -183,8 +202,9 @@ namespace TS3AudioBot.Web
 
 		private static async Task<ReleaseInfo> FetchLatestAsync(string source, string platform)
 		{
-			// GitCode API is Gitee-compatible (v5). Prefer gitcode.com host for domestic access.
-			string apiUrl = source == "gitcode"
+			// github-cn: same metadata as GitHub, package download via CN proxy.
+			var apiSource = source == "gitcode" ? "gitcode" : "github";
+			string apiUrl = apiSource == "gitcode"
 				? $"https://gitcode.com/api/v5/repos/{GitcodeOwner}/{GitcodeRepo}/releases/latest"
 				: $"https://api.github.com/repos/{GithubOwner}/{GithubRepo}/releases/latest";
 
@@ -205,9 +225,13 @@ namespace TS3AudioBot.Web
 			var notes = json.Value<string>("body") ?? string.Empty;
 			var published = json.Value<string>("created_at") ?? json.Value<string>("published_at");
 			var assets = json["assets"] as JArray ?? new JArray();
-			var asset = PickAsset(assets, platform, source);
+			var asset = PickAsset(assets, platform, apiSource);
 			if (asset is null)
 				throw new InvalidOperationException($"{source} 最新版本中没有适用于 {platform} 的安装包。");
+
+			var url = asset.Value.url;
+			if (source == "github-cn")
+				url = ToGithubCnProxyUrl(url);
 
 			return new ReleaseInfo
 			{
@@ -215,7 +239,7 @@ namespace TS3AudioBot.Web
 				Notes = Truncate(notes, 2000),
 				PublishedAt = published,
 				AssetName = asset.Value.name,
-				AssetUrl = asset.Value.url,
+				AssetUrl = url,
 			};
 		}
 
@@ -551,9 +575,49 @@ rm -rf ""$dst/.update-staging""
 
 		private static string NormalizeSource(string? source)
 		{
-			if (string.Equals(source, "github", StringComparison.OrdinalIgnoreCase)) return "github";
-			// Treat legacy "gitee" preference as domestic channel → gitcode.
-			return "gitcode";
+			if (string.IsNullOrWhiteSpace(source)) return "github-cn";
+			var s = source.Trim().ToLowerInvariant();
+			if (s == "github") return "github";
+			if (s == "gitcode") return "gitcode";
+			// Legacy domestic labels map to GitHub + CN proxy (no package re-upload needed).
+			if (s == "gitee" || s == "github-cn" || s == "cn" || s == "proxy") return "github-cn";
+			return "github-cn";
+		}
+
+		private static ReleaseInfo CloneWithProxiedUrl(ReleaseInfo src)
+		{
+			return new ReleaseInfo
+			{
+				Tag = src.Tag,
+				Notes = src.Notes,
+				PublishedAt = src.PublishedAt,
+				AssetName = src.AssetName,
+				AssetUrl = ToGithubCnProxyUrl(src.AssetUrl),
+			};
+		}
+
+		/// <summary>
+		/// Rewrite github.com / githubusercontent download URLs through a public CN proxy.
+		/// Metadata still comes from GitHub API; only the package blob download is proxied.
+		/// </summary>
+		private static string ToGithubCnProxyUrl(string url)
+		{
+			if (string.IsNullOrWhiteSpace(url)) return url;
+			// Already proxied
+			if (url.StartsWith("https://ghproxy.net/", StringComparison.OrdinalIgnoreCase)
+				|| url.StartsWith("https://mirror.ghproxy.com/", StringComparison.OrdinalIgnoreCase)
+				|| url.StartsWith("https://gh.ddlc.top/", StringComparison.OrdinalIgnoreCase))
+				return url;
+
+			// Prefer ghproxy.net for release assets.
+			if (url.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase)
+				|| url.StartsWith("https://objects.githubusercontent.com/", StringComparison.OrdinalIgnoreCase)
+				|| url.StartsWith("https://release-assets.githubusercontent.com/", StringComparison.OrdinalIgnoreCase)
+				|| url.IndexOf("githubusercontent.com/", StringComparison.OrdinalIgnoreCase) >= 0)
+			{
+				return "https://ghproxy.net/" + url;
+			}
+			return url;
 		}
 
 		internal static bool IsNewer(string remoteTag, string current)
