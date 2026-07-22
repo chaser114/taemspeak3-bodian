@@ -1,0 +1,27 @@
+# Minimal pipeline to verify GitCode Action is enabled.
+# If this file does not appear under 流水线/Actions, open:
+# 仓库设置 → 流水线 / Actions → 开启 AtomGit Action
+name: Hello GitCode Action
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  hello:
+    name: Smoke test
+    runs-on: [ubuntu-latest, x64, small]
+    steps:
+      - name: Checkout
+        uses: checkout
+      - name: Print environment
+        run: |
+          set -eu
+          echo "Hello GitCode Action"
+          echo "ref=${ATOMGIT_REF:-}"
+          echo "sha=${ATOMGIT_SHA:-}"
+          echo "repo=${ATOMGIT_REPOSITORY:-}"
+          ls -la .gitcode/workflows || true

@@ -1,9 +1,11 @@
 # GitCode / AtomGit Action
 # Docs: https://docs.gitcode.com/docs/help/home/org_project/pipeline/
-# Workflow files MUST live under .gitcode/workflows/ (not .github/workflows).
+# Path MUST be .gitcode/workflows/*.yml
 #
-# Free official hosted runners are available (ubuntu, slim/small/medium by default).
-# Prefer small/medium so open-source free quota stays reasonable.
+# Prerequisite (from official docs):
+#   "AtomGit Action 功能已开启" — enable Actions in repo settings first.
+# Official hosted runners are free/open for normal open-source CI
+# (slim/small/medium available by default).
 
 name: Build release packages
 
@@ -18,17 +20,19 @@ env:
   NODE_OPTIONS: --openssl-legacy-provider
   DOTNET_NOLOGO: "1"
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-  # webpack 4 + modern Node
   npm_config_fund: "false"
 
+# Official permission keys: project/pr/issue/note/repository/hook = read|write|none
 permissions:
   repository: write
-  packages: write
+  project: write
 
 jobs:
   build:
     name: Build Linux/Windows packages
-    runs-on: "{ubuntu-24,x64,medium}"
+    # Prefer array form from docs: [os, arch, flavor]
+    runs-on: [ubuntu-latest, x64, medium]
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: checkout
@@ -39,23 +43,42 @@ jobs:
           echo "ref=${ATOMGIT_REF:-}"
           echo "sha=${ATOMGIT_SHA:-}"
           echo "repo=${ATOMGIT_REPOSITORY:-}"
-          node -v
-          npm -v
-          dotnet --info | head -n 30
-          docker --version || true
+          node -v || true
+          npm -v || true
+          dotnet --info | head -n 40 || true
 
-      - name: Select Node 18 if available
+      - name: Ensure Node 18
         run: |
           set -eu
-          if command -v n >/dev/null 2>&1; then
-            n 18 || true
-          fi
-          # Prefer nvm-style install paths if present
-          if [ -d /usr/local/lib/nodejs ]; then
-            export PATH="/usr/local/lib/nodejs/node-v18*/bin:$PATH" || true
+          # Hosted images ship Node 18/20/22; pin via n or direct download if needed.
+          if command -v node >/dev/null 2>&1; then
+            MAJOR=$(node -p "process.versions.node.split('.')[0]")
+            if [ "$MAJOR" != "18" ]; then
+              echo "Current Node is not 18 (got v$(node -v)); installing Node 18..."
+              curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+            fi
+          else
+            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+            sudo apt-get install -y nodejs
           fi
           node -v
           npm -v
+
+      - name: Ensure .NET 6 SDK
+        run: |
+          set -eu
+          if ! dotnet --list-sdks 2>/dev/null | grep -q '^6\.'; then
+            echo "Installing .NET 6 SDK..."
+            curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+            bash /tmp/dotnet-install.sh --channel 6.0
+            export DOTNET_ROOT="$HOME/.dotnet"
+            export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
+            echo "DOTNET_ROOT=$DOTNET_ROOT" >> "$ATOMGIT_ENV"
+            echo "$DOTNET_ROOT" >> "$ATOMGIT_PATH"
+            echo "$DOTNET_ROOT/tools" >> "$ATOMGIT_PATH"
+          fi
+          dotnet --list-sdks
 
       - name: Restore .NET projects
         run: |
@@ -80,17 +103,16 @@ jobs:
           grep -Fq "bot-select-icon" dist/bundle.js
 
       - name: Compute version tag
-        id: ver
         run: |
           set -eu
-          # Prefer short time+sha — AtomGit docs do not guarantee run_number like GitHub.
           SHORT_SHA=$(printf '%s' "${ATOMGIT_SHA:-local}" | cut -c1-7)
           STAMP=$(date -u +%Y%m%d%H%M)
           TAG="build-${STAMP}-${SHORT_SHA}"
           echo "TAG=$TAG" >> "$ATOMGIT_ENV"
           echo "VERSION=$TAG" >> "$ATOMGIT_ENV"
           echo "version=$TAG"
-          printf '%s\n' "$TAG" > artifacts-version.txt
+          mkdir -p artifacts
+          printf '%s\n' "$TAG" > artifacts/VERSION.txt
 
       - name: Publish Linux package
         run: |
@@ -114,7 +136,6 @@ jobs:
           mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/WebInterface
           cp KuwoMusicPlugin/bin/Release/net6.0/KuwoMusicPlugin.dll artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/plugins/
           cp -a WebInterface/dist/. artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/WebInterface/
-          # Optional: bundle ffmpeg for Windows packages (best-effort; skip if download fails).
           if curl --fail --location --retry 3 --output /tmp/ffmpeg.zip https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip; then
             unzip -q /tmp/ffmpeg.zip -d /tmp/ffmpeg
             cp /tmp/ffmpeg/*/bin/ffmpeg.exe artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/ || true
@@ -137,49 +158,55 @@ jobs:
       - name: Upload workflow artifacts
         uses: upload-artifact
         with:
-          name: TS3AudioBot-KuwoPlugin-${{ atomgit.sha }}
+          name: release-packages
           path: |
             artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
             artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip
+            artifacts/VERSION.txt
           retention-days: 14
 
-      - name: Create GitCode Release (optional)
+      - name: Create GitCode Release (best effort)
         if: ${{ atomgit.ref == 'refs/heads/main' || atomgit.ref == 'refs/heads/master' }}
         env:
-          # Prefer explicit project secret; fall back to workflow token.
           RELEASE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
         run: |
           set -eu
           TOKEN="${RELEASE_TOKEN:-${ATOMGIT_TOKEN:-}}"
           if [ -z "$TOKEN" ]; then
-            echo "No token available; skip creating GitCode Release. Packages remain as workflow artifacts."
+            echo "No token; skip Release create. Download packages from pipeline artifacts."
             exit 0
           fi
           OWNER_REPO="${ATOMGIT_REPOSITORY:-chaser114/taemspeak3-bodian}"
           API="https://gitcode.com/api/v5/repos/${OWNER_REPO}/releases"
           TAG="$VERSION"
-          # Create release (Gitee-compatible v5 API used by GitCode)
-          BODY=$(printf 'Automated package build from %s\n\n- Linux: TS3AudioBot-KuwoPlugin-linux-x64.tar.gz\n- Windows: TS3AudioBot-KuwoPlugin-windows-x64.zip\n' "${ATOMGIT_SHA:-}")
+          BODY="Automated package build from ${ATOMGIT_SHA:-unknown}"
           CREATE_JSON=$(curl -sS -X POST "$API" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "User-Agent: taemspeak3-bodian-gitcode-ci" \
-            -d "{\"tag_name\":\"${TAG}\",\"name\":\"Automated build ${TAG}\",\"body\":$(printf '%s' "$BODY" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),\"target_commitish\":\"main\"}" \
+            -d "{\"tag_name\":\"${TAG}\",\"name\":\"Automated build ${TAG}\",\"body\":\"${BODY}\",\"target_commitish\":\"main\"}" \
             || true)
-          echo "create response: $CREATE_JSON" | head -c 500
-          # Upload assets if release id / upload_url present
-          REL_ID=$(printf '%s' "$CREATE_JSON" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("id",""))' 2>/dev/null || true)
+          echo "create response head:" 
+          printf '%s' "$CREATE_JSON" | head -c 400 || true
+          REL_ID=$(printf '%s' "$CREATE_JSON" | python3 -c 'import sys,json
+try:
+ d=json.load(sys.stdin); print(d.get("id",""))
+except Exception:
+ print("")' 2>/dev/null || true)
           if [ -z "$REL_ID" ]; then
-            # Fallback: access_token query style
             CREATE_JSON=$(curl -sS -X POST "${API}?access_token=${TOKEN}" \
               -H "Content-Type: application/json" \
               -H "User-Agent: taemspeak3-bodian-gitcode-ci" \
-              -d "{\"tag_name\":\"${TAG}\",\"name\":\"Automated build ${TAG}\",\"body\":\"Automated package build\",\"target_commitish\":\"main\"}" \
+              -d "{\"tag_name\":\"${TAG}\",\"name\":\"Automated build ${TAG}\",\"body\":\"${BODY}\",\"target_commitish\":\"main\"}" \
               || true)
-            REL_ID=$(printf '%s' "$CREATE_JSON" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("id",""))' 2>/dev/null || true)
+            REL_ID=$(printf '%s' "$CREATE_JSON" | python3 -c 'import sys,json
+try:
+ d=json.load(sys.stdin); print(d.get("id",""))
+except Exception:
+ print("")' 2>/dev/null || true)
           fi
           if [ -z "$REL_ID" ]; then
-            echo "Could not create release automatically. Download artifacts from the pipeline run and attach them on the Releases page."
+            echo "Could not auto-create release. Attach artifacts on Releases page manually."
             exit 0
           fi
           for f in \
@@ -187,7 +214,7 @@ jobs:
             artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip
           do
             name=$(basename "$f")
-            echo "Uploading $name to release $REL_ID ..."
+            echo "Uploading $name ..."
             curl -sS -X POST \
               "https://gitcode.com/api/v5/repos/${OWNER_REPO}/releases/${REL_ID}/attach_files" \
               -H "Authorization: Bearer ${TOKEN}" \
@@ -197,5 +224,5 @@ jobs:
               "https://gitcode.com/api/v5/repos/${OWNER_REPO}/releases/${REL_ID}/attach_files?access_token=${TOKEN}" \
               -H "User-Agent: taemspeak3-bodian-gitcode-ci" \
               -F "file=@${f}" \
-              || echo "upload failed for $name (attach manually if needed)"
+              || echo "upload failed for $name"
           done
