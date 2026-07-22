@@ -222,24 +222,29 @@ namespace TS3AudioBot.Web
 		private static (string name, string url)? PickAsset(JArray assets, string platform, string source)
 		{
 			// Prefer canonical package names from CI.
+			// Important: GitCode auto-attaches source archives (type=source, e.g. build-44.zip).
+			// Never treat those as install packages.
 			string[] prefer = platform == "windows"
-				? new[] { "windows-x64.zip", "windows-x64", ".zip" }
-				: new[] { "linux-x64.tar.gz", "linux-x64", ".tar.gz" };
+				? new[] { "TS3AudioBot-KuwoPlugin-windows-x64.zip", "windows-x64.zip", "windows-x64" }
+				: new[] { "TS3AudioBot-KuwoPlugin-linux-x64.tar.gz", "linux-x64.tar.gz", "linux-x64" };
 
 			var list = assets
 				.OfType<JObject>()
 				.Select(a =>
 				{
 					var name = a.Value<string>("name") ?? string.Empty;
+					var assetType = a.Value<string>("type") ?? string.Empty;
 					// GitHub: browser_download_url; GitCode/Gitee-style may use browser_download_url / download_url / url.
 					var url = a.Value<string>("browser_download_url")
 						?? a.Value<string>("download_url")
 						?? a.Value<string>("url");
 					if (!string.IsNullOrWhiteSpace(url) && !url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
 						url = null;
-					return new { name, url };
+					return new { name, url, assetType };
 				})
 				.Where(x => !string.IsNullOrWhiteSpace(x.name) && !string.IsNullOrWhiteSpace(x.url))
+				.Where(x => !string.Equals(x.assetType, "source", StringComparison.OrdinalIgnoreCase))
+				.Where(x => !IsSourceArchiveName(x.name))
 				.ToList();
 
 			foreach (var key in prefer)
@@ -251,20 +256,33 @@ namespace TS3AudioBot.Web
 				if (hit != null) return (hit.name, hit.url!);
 			}
 
-			// Fallback: any matching extension for platform.
+			// Fallback: any matching extension for platform among non-source assets.
 			if (platform == "windows")
 			{
-				var hit = list.FirstOrDefault(x => x.name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+				var hit = list.FirstOrDefault(x =>
+					x.name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+					&& x.name.IndexOf("windows", StringComparison.OrdinalIgnoreCase) >= 0);
 				if (hit != null) return (hit.name, hit.url!);
 			}
 			else
 			{
 				var hit = list.FirstOrDefault(x =>
-					x.name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)
-					|| x.name.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase));
+					(x.name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) || x.name.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
+					&& x.name.IndexOf("linux", StringComparison.OrdinalIgnoreCase) >= 0);
 				if (hit != null) return (hit.name, hit.url!);
 			}
 			return null;
+		}
+
+		private static bool IsSourceArchiveName(string name)
+		{
+			// GitCode auto source names: build-44.zip / build-44.tar.gz / ...
+			if (string.IsNullOrWhiteSpace(name)) return false;
+			var n = name.Trim();
+			if (n.StartsWith("Source", StringComparison.OrdinalIgnoreCase)) return true;
+			if (System.Text.RegularExpressions.Regex.IsMatch(n, @"^build-\d+(\.[a-z0-9]+)*\.(zip|tar\.gz|tgz|tar\.bz2|tar)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+				return true;
+			return false;
 		}
 
 		private static async Task DownloadFileAsync(string url, string path)
