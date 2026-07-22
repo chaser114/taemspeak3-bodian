@@ -92,10 +92,9 @@ start-web-console.bat
 
 说明：
 
-- **构建**：GitHub Actions 自动打 Win/Linux 包并发布 GitHub Release（主流程）  
-- **国内更新（推荐）**：网页默认 **「国内加速（GitHub 代理）」**——版本信息来自 GitHub，安装包经国内代理下载，**不必再把包上传到 GitCode**  
-- **GitCode 镜像（可选）**：流水线会尝试镜像安装包，但海外 Runner → 国内节点常很慢/卡住；该步骤限时且失败不阻断发版  
-- 若仍要用 GitCode 附件：配置 GitHub Actions Secret `GITCODE_TOKEN` 即可  
+- **构建 / 发版**：只走 GitHub Actions → GitHub Releases（推 `main` 即自动）  
+- **国内更新**：网页默认 **「国内加速（推荐）」**——版本查 GitHub，安装包经 `ghproxy` 等代理下载  
+- **不再依赖** GitCode/Gitee 上传安装包；GitCode 仅可作源码镜像（可选）  
 - **Docker 部署**请继续用 `docker compose up -d --build`，网页升级需要可写的安装目录，容器镜像层通常不适用  
 - 包内 `VERSION` 文件记录当前 `build-N` 版本号
 

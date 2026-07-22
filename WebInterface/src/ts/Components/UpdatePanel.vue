@@ -87,9 +87,8 @@ export default Vue.extend({
       notes: "",
       source: "github-cn",
       sources: [
-        { id: "github-cn", label: "国内加速（GitHub 代理）", available: true },
+        { id: "github-cn", label: "国内加速（推荐）", available: true },
         { id: "github", label: "GitHub 官方源", available: true },
-        { id: "gitcode", label: "GitCode（需已上传安装包）", available: true },
       ] as SourceInfo[],
       password: "",
       error: "",

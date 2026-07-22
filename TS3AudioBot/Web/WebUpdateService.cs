@@ -49,10 +49,9 @@ namespace TS3AudioBot.Web
 				busy = Volatile.Read(ref busy) != 0,
 				sources = new object[]
 				{
-					// Default domestic path: GitHub metadata + ghproxy download (no GitCode package upload needed).
-					new { id = "github-cn", label = "国内加速（GitHub 代理）", defaultSource = true },
+					// Default: GitHub metadata + domestic proxy download. No third-party package upload.
+					new { id = "github-cn", label = "国内加速（推荐）", defaultSource = true },
 					new { id = "github", label = "GitHub 官方源", defaultSource = false },
-					new { id = "gitcode", label = "GitCode（需已上传安装包）", defaultSource = false },
 				}
 			};
 		}
@@ -61,33 +60,21 @@ namespace TS3AudioBot.Web
 		{
 			var platform = DetectPlatform();
 			var errors = new List<string>();
-			ReleaseInfo? gitcode = null;
 			ReleaseInfo? github = null;
 
 			try { github = await FetchLatestAsync("github", platform); }
 			catch (Exception ex) { errors.Add("GitHub: " + ex.Message); Log.Warn(ex, "GitHub update check failed."); }
 
-			try { gitcode = await FetchLatestAsync("gitcode", platform); }
-			catch (Exception ex) { errors.Add("GitCode: " + ex.Message); Log.Warn(ex, "GitCode update check failed."); }
-
 			// github-cn reuses GitHub release metadata, only rewrites download URL via proxy.
 			var githubCn = github is null ? null : CloneWithProxiedUrl(github);
 
 			var preferred = NormalizeSource(preferredSource);
-			ReleaseInfo? selected = preferred switch
-			{
-				"github" => github ?? githubCn ?? gitcode,
-				"gitcode" => gitcode ?? githubCn ?? github,
-				_ => githubCn ?? github ?? gitcode, // github-cn default
-			};
-			string selectedSource;
-			if (selected is null) selectedSource = preferred;
-			else if (preferred == "github" && github != null && ReferenceEquals(selected, github)) selectedSource = "github";
-			else if (preferred == "gitcode" && gitcode != null && ReferenceEquals(selected, gitcode)) selectedSource = "gitcode";
-			else if (githubCn != null && ReferenceEquals(selected, githubCn)) selectedSource = "github-cn";
-			else if (github != null && ReferenceEquals(selected, github)) selectedSource = "github";
-			else if (gitcode != null && ReferenceEquals(selected, gitcode)) selectedSource = "gitcode";
-			else selectedSource = preferred;
+			ReleaseInfo? selected = preferred == "github"
+				? (github ?? githubCn)
+				: (githubCn ?? github);
+			var selectedSource = selected is null
+				? preferred
+				: (preferred == "github" && github != null && ReferenceEquals(selected, github) ? "github" : "github-cn");
 
 			var hasUpdate = selected != null && IsNewer(selected.Tag, CurrentVersion);
 			return new
@@ -106,7 +93,7 @@ namespace TS3AudioBot.Web
 					new
 					{
 						id = "github-cn",
-						label = "国内加速（GitHub 代理）",
+						label = "国内加速（推荐）",
 						available = githubCn != null,
 						latestVersion = githubCn?.Tag,
 						hasUpdate = githubCn != null && IsNewer(githubCn.Tag, CurrentVersion),
@@ -118,14 +105,6 @@ namespace TS3AudioBot.Web
 						available = github != null,
 						latestVersion = github?.Tag,
 						hasUpdate = github != null && IsNewer(github.Tag, CurrentVersion),
-					},
-					new
-					{
-						id = "gitcode",
-						label = "GitCode（需已上传安装包）",
-						available = gitcode != null,
-						latestVersion = gitcode?.Tag,
-						hasUpdate = gitcode != null && IsNewer(gitcode.Tag, CurrentVersion),
 					},
 				},
 				errors,
@@ -311,14 +290,67 @@ namespace TS3AudioBot.Web
 
 		private static async Task DownloadFileAsync(string url, string path)
 		{
-			using var req = new HttpRequestMessage(HttpMethod.Get, url);
-			req.Headers.TryAddWithoutValidation("User-Agent", "taemspeak3-bodian-updater");
-			using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-			if (!resp.IsSuccessStatusCode)
-				throw new InvalidOperationException($"下载更新包失败（HTTP {(int)resp.StatusCode}）。");
-			await using var input = await resp.Content.ReadAsStreamAsync();
-			await using var output = File.Create(path);
-			await input.CopyToAsync(output);
+			var candidates = BuildDownloadCandidates(url);
+			Exception? last = null;
+			foreach (var candidate in candidates)
+			{
+				try
+				{
+					using var req = new HttpRequestMessage(HttpMethod.Get, candidate);
+					req.Headers.TryAddWithoutValidation("User-Agent", "taemspeak3-bodian-updater");
+					using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+					if (!resp.IsSuccessStatusCode)
+					{
+						last = new InvalidOperationException($"HTTP {(int)resp.StatusCode} from {candidate}");
+						Log.Warn("Download candidate failed: {0}", last.Message);
+						continue;
+					}
+					await using var input = await resp.Content.ReadAsStreamAsync();
+					await using var output = File.Create(path);
+					await input.CopyToAsync(output);
+					if (candidate != url)
+						Log.Info("Downloaded update package via proxy: {0}", candidate);
+					return;
+				}
+				catch (Exception ex)
+				{
+					last = ex;
+					Log.Warn(ex, "Download candidate failed: {0}", candidate);
+				}
+			}
+			throw new InvalidOperationException("下载更新包失败：" + (last?.Message ?? "所有下载地址均不可用。"), last);
+		}
+
+		private static IEnumerable<string> BuildDownloadCandidates(string url)
+		{
+			if (string.IsNullOrWhiteSpace(url))
+				yield break;
+
+			// If already a proxy URL, try it first then strip to direct.
+			if (url.StartsWith("https://ghproxy.net/", StringComparison.OrdinalIgnoreCase)
+				|| url.StartsWith("https://mirror.ghproxy.com/", StringComparison.OrdinalIgnoreCase)
+				|| url.StartsWith("https://gh.ddlc.top/", StringComparison.OrdinalIgnoreCase)
+				|| url.StartsWith("https://gitclone.com/", StringComparison.OrdinalIgnoreCase))
+			{
+				yield return url;
+				var direct = url
+					.Replace("https://ghproxy.net/", "", StringComparison.OrdinalIgnoreCase)
+					.Replace("https://mirror.ghproxy.com/", "", StringComparison.OrdinalIgnoreCase)
+					.Replace("https://gh.ddlc.top/", "", StringComparison.OrdinalIgnoreCase);
+				if (direct.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+					yield return direct;
+				yield break;
+			}
+
+			// Proxied first (domestic), then direct GitHub.
+			if (url.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase)
+				|| url.IndexOf("githubusercontent.com/", StringComparison.OrdinalIgnoreCase) >= 0)
+			{
+				yield return "https://ghproxy.net/" + url;
+				yield return "https://mirror.ghproxy.com/" + url;
+				yield return "https://gh.ddlc.top/" + url;
+			}
+			yield return url;
 		}
 
 		private static void ExtractPackage(string packagePath, string extractDir)
@@ -578,9 +610,7 @@ rm -rf ""$dst/.update-staging""
 			if (string.IsNullOrWhiteSpace(source)) return "github-cn";
 			var s = source.Trim().ToLowerInvariant();
 			if (s == "github") return "github";
-			if (s == "gitcode") return "gitcode";
-			// Legacy domestic labels map to GitHub + CN proxy (no package re-upload needed).
-			if (s == "gitee" || s == "github-cn" || s == "cn" || s == "proxy") return "github-cn";
+			// gitcode/gitee and other domestic labels → GitHub + CN proxy.
 			return "github-cn";
 		}
 
