@@ -85,9 +85,9 @@ export default Vue.extend({
       latestVersion: "",
       hasUpdate: false,
       notes: "",
-      source: "gitee",
+      source: "gitcode",
       sources: [
-        { id: "gitee", label: "Gitee 更新（国内服务器）", available: true },
+        { id: "gitcode", label: "GitCode 更新（国内服务器）", available: true },
         { id: "github", label: "GitHub 更新（官方源）", available: true },
       ] as SourceInfo[],
       password: "",

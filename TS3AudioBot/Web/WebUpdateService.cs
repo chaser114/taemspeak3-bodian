@@ -25,11 +25,11 @@ namespace TS3AudioBot.Web
 		private static readonly HttpClient Http = CreateHttpClient();
 		private static int busy;
 
-		// Public release channels. Owners can change these repo paths via environment if needed.
+		// Public release channels. Domestic default is GitCode (Gitee release quota is limited).
 		private const string GithubOwner = "chaser114";
 		private const string GithubRepo = "taemspeak3-bodian";
-		private const string GiteeOwner = "chaser114";
-		private const string GiteeRepo = "taemspeak3-bodian";
+		private const string GitcodeOwner = "chaser114";
+		private const string GitcodeRepo = "taemspeak3-bodian";
 
 		public string InstallRoot { get; }
 		public string CurrentVersion { get; }
@@ -49,7 +49,7 @@ namespace TS3AudioBot.Web
 				busy = Volatile.Read(ref busy) != 0,
 				sources = new object[]
 				{
-					new { id = "gitee", label = "Gitee 更新（国内服务器）", defaultSource = true },
+					new { id = "gitcode", label = "GitCode 更新（国内服务器）", defaultSource = true },
 					new { id = "github", label = "GitHub 更新（官方源）", defaultSource = false },
 				}
 			};
@@ -59,24 +59,24 @@ namespace TS3AudioBot.Web
 		{
 			var platform = DetectPlatform();
 			var errors = new List<string>();
-			ReleaseInfo? gitee = null;
+			ReleaseInfo? gitcode = null;
 			ReleaseInfo? github = null;
 
-			try { gitee = await FetchLatestAsync("gitee", platform); }
-			catch (Exception ex) { errors.Add("Gitee: " + ex.Message); Log.Warn(ex, "Gitee update check failed."); }
+			try { gitcode = await FetchLatestAsync("gitcode", platform); }
+			catch (Exception ex) { errors.Add("GitCode: " + ex.Message); Log.Warn(ex, "GitCode update check failed."); }
 
 			try { github = await FetchLatestAsync("github", platform); }
 			catch (Exception ex) { errors.Add("GitHub: " + ex.Message); Log.Warn(ex, "GitHub update check failed."); }
 
 			var preferred = NormalizeSource(preferredSource);
 			var selected = preferred == "github"
-				? (github ?? gitee)
-				: (gitee ?? github);
+				? (github ?? gitcode)
+				: (gitcode ?? github);
 			var selectedSource = selected is null
 				? preferred
 				: (preferred == "github" && github != null ? "github"
-					: preferred == "gitee" && gitee != null ? "gitee"
-					: gitee != null && ReferenceEquals(selected, gitee) ? "gitee" : "github");
+					: preferred == "gitcode" && gitcode != null ? "gitcode"
+					: gitcode != null && ReferenceEquals(selected, gitcode) ? "gitcode" : "github");
 
 			var hasUpdate = selected != null && IsNewer(selected.Tag, CurrentVersion);
 			return new
@@ -94,11 +94,11 @@ namespace TS3AudioBot.Web
 				{
 					new
 					{
-						id = "gitee",
-						label = "Gitee 更新（国内服务器）",
-						available = gitee != null,
-						latestVersion = gitee?.Tag,
-						hasUpdate = gitee != null && IsNewer(gitee.Tag, CurrentVersion),
+						id = "gitcode",
+						label = "GitCode 更新（国内服务器）",
+						available = gitcode != null,
+						latestVersion = gitcode?.Tag,
+						hasUpdate = gitcode != null && IsNewer(gitcode.Tag, CurrentVersion),
 					},
 					new
 					{
@@ -183,14 +183,14 @@ namespace TS3AudioBot.Web
 
 		private static async Task<ReleaseInfo> FetchLatestAsync(string source, string platform)
 		{
-			string apiUrl = source == "gitee"
-				? $"https://gitee.com/api/v5/repos/{GiteeOwner}/{GiteeRepo}/releases/latest"
+			// GitCode API is Gitee-compatible (v5). Prefer gitcode.com host for domestic access.
+			string apiUrl = source == "gitcode"
+				? $"https://gitcode.com/api/v5/repos/{GitcodeOwner}/{GitcodeRepo}/releases/latest"
 				: $"https://api.github.com/repos/{GithubOwner}/{GithubRepo}/releases/latest";
 
 			using var req = new HttpRequestMessage(HttpMethod.Get, apiUrl);
 			req.Headers.TryAddWithoutValidation("Accept", "application/json");
-			if (source == "github")
-				req.Headers.TryAddWithoutValidation("User-Agent", "taemspeak3-bodian-updater");
+			req.Headers.TryAddWithoutValidation("User-Agent", "taemspeak3-bodian-updater");
 
 			using var resp = await Http.SendAsync(req);
 			var body = await resp.Content.ReadAsStringAsync();
@@ -231,7 +231,7 @@ namespace TS3AudioBot.Web
 				.Select(a =>
 				{
 					var name = a.Value<string>("name") ?? string.Empty;
-					// GitHub: browser_download_url; Gitee may use browser_download_url / path / url.
+					// GitHub: browser_download_url; GitCode/Gitee-style may use browser_download_url / download_url / url.
 					var url = a.Value<string>("browser_download_url")
 						?? a.Value<string>("download_url")
 						?? a.Value<string>("url");
@@ -534,7 +534,8 @@ rm -rf ""$dst/.update-staging""
 		private static string NormalizeSource(string? source)
 		{
 			if (string.Equals(source, "github", StringComparison.OrdinalIgnoreCase)) return "github";
-			return "gitee";
+			// Treat legacy "gitee" preference as domestic channel → gitcode.
+			return "gitcode";
 		}
 
 		internal static bool IsNewer(string remoteTag, string current)

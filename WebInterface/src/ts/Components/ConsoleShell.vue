@@ -122,11 +122,11 @@ export default Vue.extend({
       try {
         const status = await consoleApi<{ currentVersion?: string }>("update/status");
         this.currentVersion = status.currentVersion || "";
-        const check = await consoleApi<{ hasUpdate?: boolean; currentVersion?: string; latestVersion?: string }>("update/check", { source: "gitee" });
+        const check = await consoleApi<{ hasUpdate?: boolean; currentVersion?: string; latestVersion?: string }>("update/check", { source: "gitcode" });
         if (check.currentVersion) this.currentVersion = check.currentVersion;
         this.hasUpdate = !!check.hasUpdate;
       } catch (_) {
-        // Silent: network / gitee downtime should not break the console shell.
+        // Silent: network / gitcode downtime should not break the console shell.
       }
     },
   },

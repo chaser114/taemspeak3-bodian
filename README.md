@@ -92,8 +92,8 @@ start-web-console.bat
 
 说明：
 
-- **构建只在 GitHub Actions**；Gitee 只作源码镜像 + 国内下载源（Releases）  
-- 发布包需同步到 **Gitee Releases**（https://gitee.com/chaser114/taemspeak3-bodian）后，国内源才可用  
+- **构建在 GitHub Actions**；**GitCode** 作国内源码镜像 + 国内下载源（Releases）  
+- 发布包需同步到 **GitCode Releases**（https://gitcode.com/chaser114/taemspeak3-bodian）后，国内「GitCode 更新」才可用  
 - **Docker 部署**请继续用 `docker compose up -d --build`，网页升级需要可写的安装目录，容器镜像层通常不适用  
 - 包内 `VERSION` 文件记录当前 `build-N` 版本号
 
