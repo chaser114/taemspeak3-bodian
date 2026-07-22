@@ -122,13 +122,18 @@ jobs:
       # One-time setup: GitHub repo Settings → Secrets → Actions → GITCODE_TOKEN
       # (GitCode personal access token with repository write / release permission)
       - name: Mirror release to GitCode
-        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && secrets.GITCODE_TOKEN != ''
+        # Note: GitHub Actions forbids `secrets.*` inside `if:`; check token inside the script.
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         env:
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
           TAG: build-${{ github.run_number }}
           OWNER_REPO: chaser114/taemspeak3-bodian
         run: |
           set -euo pipefail
+          if [ -z "${GITCODE_TOKEN:-}" ]; then
+            echo "GITCODE_TOKEN secret is not set; skip GitCode mirror."
+            exit 0
+          fi
           python3 <<'PY'
           import json
           import os
