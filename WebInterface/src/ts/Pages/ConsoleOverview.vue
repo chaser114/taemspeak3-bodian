@@ -221,25 +221,59 @@ export default Vue.extend({
 </script>
 
 <style scoped lang="less">
-.music { max-width: 1050px; margin: auto; padding: 44px; }
-.music header p { color: #287f74; font-weight: bold; }
+.music { max-width: 1050px; margin: auto; padding: 36px 28px 48px; }
+.music header p { margin: 0 0 6px; color: var(--console-brand-dark); font-weight: 700; font-size: 13px; }
+.music header h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
+.music header > span { display: block; margin-top: 8px; color: var(--console-muted); font-size: 14px; line-height: 1.55; }
 .bot-select { display: inline-flex; align-items: center; gap: 12px; margin-top: 16px; color: #536572; font-size: 13px; }
 .bot-select-label { color: #667684; font-weight: 600; white-space: nowrap; }
 .bot-select-control { position: relative; display: flex; align-items: center; min-width: 250px; }
-.bot-select-icon { position: absolute; z-index: 1; left: 11px; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 8px; background: #e4f5f1; color: #287f74; font-size: 14px; font-style: normal; pointer-events: none; }
-.bot-select select { appearance: none; width: 100%; min-width: 0; height: 42px; margin: 0; padding: 0 38px 0 44px; border: 1px solid #d9e7e4; border-radius: 12px; outline: 0; background: #fff; color: var(--console-ink); font: inherit; cursor: pointer; box-shadow: 0 5px 14px rgba(50, 89, 83, .06); transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease; }
+.bot-select-icon {
+  position: absolute; z-index: 1; left: 11px; width: 24px; height: 24px; display: grid; place-items: center;
+  border-radius: var(--console-radius-sm); background: var(--console-brand-soft); color: var(--console-brand-dark);
+  font-size: 14px; font-style: normal; pointer-events: none;
+}
+.bot-select select {
+  appearance: none; width: 100%; min-width: 0; height: 44px; margin: 0; padding: 0 38px 0 44px;
+  border: 1px solid #d9e7e4; border-radius: var(--console-radius); outline: 0; background: #fff;
+  color: var(--console-ink); font: inherit; cursor: pointer; box-shadow: var(--console-shadow);
+}
 .bot-select select:hover { border-color: #a9d9d0; background: #fbfefd; }
-.bot-select select:focus { border-color: #4fb8a8; box-shadow: 0 0 0 3px rgba(79, 184, 168, .14), 0 5px 14px rgba(50, 89, 83, .06); }
-.bot-select-chevron { position: absolute; right: 13px; color: #70828b; font-size: 17px; font-style: normal; line-height: 1; pointer-events: none; transform: translateY(-2px); }
-.music h1 { font-size: 32px; }
-.music section { margin-top: 34px; }
-.music article { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 8px; }
-.music article:hover { background: #edf7f5; }
-.music article img, .music article i { width: 46px; height: 46px; border-radius: 7px; object-fit: cover; background: #dff1ed; display: grid; place-items: center; font-style: normal; }
+.bot-select select:focus {
+  border-color: var(--console-brand);
+  box-shadow: 0 0 0 3px rgba(79, 184, 168, 0.14), var(--console-shadow);
+}
+.bot-select-chevron {
+  position: absolute; right: 13px; color: #70828b; font-size: 17px; font-style: normal;
+  line-height: 1; pointer-events: none; transform: translateY(-2px);
+}
+.music section { margin-top: 28px; }
+.music section h2 { margin: 0 0 12px; font-size: 16px; }
+.music article {
+  display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--console-radius-sm);
+}
+@media (hover: hover) and (pointer: fine) {
+  .music article:hover { background: var(--console-brand-soft); }
+}
+.music article img, .music article i {
+  width: 48px; height: 48px; border-radius: var(--console-radius-sm); object-fit: cover;
+  background: var(--console-brand-soft); display: grid; place-items: center; font-style: normal; color: var(--console-brand-dark);
+}
 .music article div { flex: 1; min-width: 0; }
-.music b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.music button { height: 34px; border: 0; border-radius: 6px; background: #4fb8a8; color: #fff; padding: 0 11px; cursor: pointer; }
+.music b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.music button {
+  height: 36px; border: 0; border-radius: var(--console-radius-sm); background: var(--console-brand);
+  color: #fff; padding: 0 12px; cursor: pointer; font-weight: 600;
+}
 .music button:disabled { opacity: .62; cursor: wait; }
-.error { color: #b34d57; }
-@media (max-width: 760px) { .music { padding: 28px 16px; } .bot-select { display: flex; align-items: stretch; flex-direction: column; gap: 7px; margin-top: 18px; } .bot-select-control { width: 100%; min-width: 0; } .bot-select select { width: 100%; } }
+.error { color: var(--console-danger); margin-top: 12px; }
+@media (max-width: 760px) {
+  .music { padding: 24px 16px 36px; }
+  .music header h1 { font-size: 24px; }
+  .bot-select { display: flex; align-items: stretch; flex-direction: column; gap: 8px; margin-top: 16px; }
+  .bot-select-control { width: 100%; min-width: 0; }
+  .bot-select select { width: 100%; height: 46px; }
+  .music article { padding: 12px 8px; }
+  .music button { height: 40px; min-width: 64px; }
+}
 </style>
