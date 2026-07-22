@@ -1,59 +1,108 @@
 # TS3AudioBot 波点音乐插件
 
-基于 [Splamy/TS3AudioBot](https://github.com/Splamy/TS3AudioBot) 的自用定制版。机器人通过独立的 `KuwoMusicPlugin.dll` 调用酷我音乐 API 搜索和播放歌曲，并提供账号密码登录的网页控制台。
+基于 [Splamy/TS3AudioBot](https://github.com/Splamy/TS3AudioBot) 的开源定制版：通过 `KuwoMusicPlugin.dll` 搜索/播放波点（酷我）音乐，并提供账号密码登录的网页控制台。
 
-## 功能
+- 源码 / 自动构建： [GitHub](https://github.com/chaser114/taemspeak3-bodian)
+- 源码镜像（可选）： [GitCode](https://gitcode.com/chaser114/taemspeak3-bodian)
 
-- `!search 歌曲名`：搜索歌曲
-- `!play 歌曲名`：搜索并直接播放第一首
-- `!play 序号`：播放最近一次搜索结果中的对应歌曲
-- `!add 歌曲名`：搜索并加入待播队列
-- `!add 序号`：将搜索结果加入待播队列
-- `!next`：立即切换到队列下一首
-- 普通 TeamSpeak 用户默认可以搜索、点歌、立即播放、加入队列和切歌
-- 只有管理员可以清空整个待播队列
-- 播放时将机器人 TeamSpeak 简介更新为歌曲名，空闲时显示“休眠中”
-- 插件独立于主程序，文件位于 `plugins/KuwoMusicPlugin.dll`
+## 功能概览
 
-## 网页控制台
+### TeamSpeak 内命令
 
-网页端默认监听 `58913` 端口。它使用独立的账号密码体系，不依赖 TeamSpeak UID。
+| 命令 | 说明 |
+|------|------|
+| `!search 歌曲名` | 搜索歌曲 |
+| `!play 歌曲名` / `!play 序号` | 播放搜索结果 |
+| `!add 歌曲名` / `!add 序号` | 加入待播队列 |
+| `!next` | 切到下一首 |
 
-首次访问网页时：
+- 普通用户默认可搜索、点歌、切歌  
+- **只有管理员**可清空整队  
+- 播放时把机器人简介更新为歌名；空闲显示「休眠中」（需 TS 简介权限）
 
-1. 创建第一个管理员账号。
-2. 在“管理”页面设置站点名称。
-3. 在“新建机器人”区域填写 TeamSpeak 地址、机器人名称和服务器密码。
-4. 之后可以在同一页面创建、编辑、删除多个机器人，也可以创建普通子账号和管理员账号。
+### 网页控制台（默认端口 `58913`）
 
-网页端支持：
+独立账号体系，与 TeamSpeak UID 无关。
 
-- 点歌搜索、封面展示、立即播放和加入队列
-- 最近播放独立页面
-- 底部播放器、上一首、暂停/继续、下一首和待播队列
-- 管理员清空整个待播队列
-- 桌面端和手机端响应式布局
-- 编辑机器人时弹窗修改连接信息并重新连接
+- 搜索点歌、封面、播放 / 加队、最近播放  
+- 底部播放器：上一首 / 暂停 / 下一首、**音量**、**顺序 / 列表循环 / 单曲循环**、**随机**、待播队列  
+- 点击当前歌曲展开 **滚动歌词**（无歌词显示「暂无歌词」）  
+- 管理员：多机器人管理、网页账号（创建 / 启停 / **改密**）、品牌名称  
+- 管理员：程序更新、服务日志、重启 / 停止服务（密码弹窗确认）  
+- 桌面 + 手机自适应布局  
 
-启动后访问 `http://服务器IP:58913`。网页配置和机器人数据保存在运行目录的 **`data/`** 中，请勿删除。
+首次打开网页：
 
-## 数据与无损升级
+1. 创建管理员账号  
+2. 在「管理」里填写 TeamSpeak 地址、机器人名称（可选服务器密码）  
+3. 需要时再创建普通用户账号  
 
-程序文件和用户数据已分开：
+## 下载
 
-| 目录/文件 | 内容 | 升级时 |
-|-----------|------|--------|
+在 GitHub [Releases](https://github.com/chaser114/taemspeak3-bodian/releases) 下载：
+
+- Windows：`TS3AudioBot-KuwoPlugin-windows-x64.zip`
+- Linux：`TS3AudioBot-KuwoPlugin-linux-x64.tar.gz`
+
+推送到 `main` 后由 **GitHub Actions** 自动构建并发布。也可在对应 Actions 任务的 Artifacts 中下载测试包。
+
+## 快速部署
+
+### Windows
+
+1. 解压发布包  
+2. 双击 `start-web-console.bat`（或 `run\start-web-console.bat`）  
+3. 浏览器打开 `http://127.0.0.1:58913`  
+
+包内已含运行时、`ffmpeg.exe`、网页与插件。启动时会自动准备 `data\`。
+
+### Linux（Ubuntu / Debian 等）
+
+```bash
+tar -xzf TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
+cd TS3AudioBot-KuwoPlugin-linux-x64
+chmod +x run/start-linux.sh
+./run/start-linux.sh
+```
+
+也可运行包内 `start.sh` / `install-linux.sh`。  
+启动脚本会安装并校验：
+
+- `ffmpeg`
+- `libopus0` + **`libopus-dev`**（系统没有名为 `libopus` 的包；缺 `libopus-dev` 时会报找不到 libopus）
+
+然后打开 `http://服务器IP:58913` 完成网页初始化。
+
+### Docker
+
+```bash
+chmod +x run/start-docker.sh
+./run/start-docker.sh
+# 等价于 packaging/docker 下 docker compose up -d --build
+```
+
+- 网页：`http://服务器IP:58913`  
+- 数据在挂载的 `data/`，重建容器不要删卷  
+- 停止：`docker compose down`  
+
+需要本机已安装 Docker Engine 与 Compose V2。
+
+## 数据与升级
+
+程序与用户数据分离：
+
+| 路径 | 内容 | 升级时 |
+|------|------|--------|
 | `data/` | 机器人、网页账号、权限、主配置 | **必须保留** |
 | 主程序、`plugins/`、`WebInterface/` | 程序与界面 | 可被新版本替换 |
 
-### 推荐升级方式（给最终用户）
+### 脚本升级（推荐）
 
-**不要**把新包直接解压覆盖旧目录。请用包内升级脚本：
+**不要**把新包直接解压覆盖整个旧目录。
 
 **Linux**
 
 ```bash
-# 在旧安装目录执行
 ./run/update-linux.sh /path/to/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
 ./run/start-linux.sh
 ```
@@ -65,116 +114,53 @@ update-windows.bat ..\TS3AudioBot-KuwoPlugin-windows-x64-new
 start-web-console.bat
 ```
 
-脚本会自动：备份 `data/` → 只替换程序 → 保留机器人与账号。  
-旧版本若数据还在安装根目录（`bots/`、`ts3audiobot.db` 等），下次启动会自动迁入 `data/`。
-
-**Docker** 继续使用挂载的 `data/` 卷，`docker compose up -d --build` 重建镜像即可，不要删 `data/`。
+脚本会备份 `data/`、只替换程序。旧版若数据仍在安装根目录，下次启动会迁入 `data/`。
 
 ### 网页一键更新（管理员）
 
-管理员登录后：
+1. 登录管理员 → 侧栏版本号 / **管理**页「程序更新」  
+2. 选择更新源并输入管理员密码确认  
+3. 只替换程序文件，**不覆盖 `data/`**，完成后自动重启  
 
-- **电脑端**：左侧栏底部显示版本号；有更新时会 **变黄**，点开即可升级  
-- **手机端**：进入 **管理** 页，顶部「程序更新」卡片同样可检查/升级  
+更新源：
 
-升级弹层支持选择：
+| 选项 | 说明 |
+|------|------|
+| **国内加速（推荐）** | 版本信息来自 GitHub，安装包经国内代理（如 ghproxy）下载 |
+| **GitHub 官方源** | 直连 GitHub Releases |
 
-- **Gitee 更新（国内服务器）**（默认）  
-- **GitHub 更新（官方源）**  
+构建与发版只依赖 **GitHub Actions → GitHub Releases**。  
+**不需要**再把安装包手动传到 Gitee / GitCode。GitCode 如有仓库，仅作源码镜像即可。
 
-确认时需再输入一次管理员密码。更新只替换程序文件，**不会覆盖 `data/`**。  
+运维（管理页 → 服务与日志）：
 
-更新后会**自动重启**（手机也能继续用网页）。运维方式对齐常见面板软件：
+- 查看后台日志  
+- 重启 / 停止服务（密码确认弹窗）  
+- 备选脚本：Windows `stop.bat`，Linux `./run/stop-linux.sh`  
+- 日志文件：`logs/console.log`、`data/logs/`  
 
-- **管理页 → 服务与日志**：在线查看后台日志，支持**重启 / 停止**（需管理员密码）  
-- 日志文件：`logs/console.log` + `data/logs/`  
-- 服务器脚本备选：Windows `stop.bat`，Linux `./run/stop-linux.sh`  
+Docker 请继续用 `docker compose up -d --build`；容器内网页升级需要可写安装目录，一般不适用。
 
-说明：
+包内 `VERSION` 记录当前 `build-N`（或等价版本号）。
 
-- **构建 / 发版**：只走 GitHub Actions → GitHub Releases（推 `main` 即自动）  
-- **国内更新**：网页默认 **「国内加速（推荐）」**——版本查 GitHub，安装包经 `ghproxy` 等代理下载  
-- **不再依赖** GitCode/Gitee 上传安装包；GitCode 仅可作源码镜像（可选）  
-- **Docker 部署**请继续用 `docker compose up -d --build`，网页升级需要可写的安装目录，容器镜像层通常不适用  
-- 包内 `VERSION` 文件记录当前 `build-N` 版本号
+## 本地构建
 
-## 下载
-
-在 GitHub 的 [Releases](../../releases) 页面下载带版本号的构建包：
-
-- Windows：`TS3AudioBot-KuwoPlugin-windows-x64.zip`
-- Linux：`TS3AudioBot-KuwoPlugin-linux-x64.tar.gz`
-
-每次推送到 `main`、`master` 或手动运行 Actions 时，也可以在 Actions 对应任务的 Artifacts 中下载测试包。
-
-## 部署方式
-
-### Docker 一键部署（推荐服务器使用）
-
-Docker 部署在服务器本地构建镜像，不需要从 GitHub 拉取成品镜像：
-
-```bash
-chmod +x run/start-docker.sh
-./run/start-docker.sh
-```
-
-也可以直接运行：
-
-```bash
-chmod +x packaging/docker/install-docker.sh
-./packaging/docker/install-docker.sh
-```
-
-脚本会执行 `docker compose up -d --build`，网页端地址为 `http://服务器IP:58913`。停止服务：
-
-```bash
-docker compose down
-```
-
-要求服务器已安装 Docker Engine 和 Docker Compose V2。`data/` 目录通过 Compose 挂载到容器中，容器重建不会丢失账号和机器人配置。
-
-### Linux 一键部署
-
-适用于 Ubuntu 22.04 x64 的 Linux 发布包：
-
-```bash
-tar -xzf TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
-cd TS3AudioBot-KuwoPlugin-linux-x64
-chmod +x run/start-linux.sh
-./run/start-linux.sh
-```
-
-也可以直接运行包内的 `start.sh`。首次启动后打开网页完成管理员账号和 TeamSpeak 连接配置。启动脚本会安装并校验 `ffmpeg`、`libopus0`、`libopus-dev`（Debian/Ubuntu；注意没有叫 `libopus` 的包，要用 `libopus-dev` 才能提供 `libopus.so`），并自动准备 `data/` 数据目录。
-
-### Windows 一键部署
-
-解压 Windows 发布包后，双击包根目录的 `start-web-console.bat` 即可启动机器人和网页端；也可以双击 `run/start-web-console.bat`。包内已包含 .NET runtime、`ffmpeg.exe`、网页控制台和酷我插件。启动时会自动准备 `data\` 数据目录。
-
-网页地址：`http://127.0.0.1:58913`
-
-### 本地构建
-
-Windows 下可以在仓库根目录执行：
+**Windows 一键打包**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\packaging\windows\build-package.ps1
 ```
 
-或者双击 `run/build-windows-package.ps1`。脚本会构建网页端、机器人、酷我插件并生成可直接运行的 Windows x64 包。
-
-Linux 下可以在仓库根目录执行：
+**Linux 一键打包**
 
 ```bash
 chmod +x run/build-linux-package.sh
 ./run/build-linux-package.sh
 ```
 
-脚本会在 `dist/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz` 生成带网页端的自包含 Linux x64 包，
-并在打包前校验 `WebInterface/bundle.js`、`plugins/KuwoMusicPlugin.dll`、主程序和 Linux 启动脚本。
-Linux 构建会显式使用 `--runtime linux-x64` 和 `-p:SkipGitVersion=true`，不会再安装不兼容 .NET 6 的
-`dotnet-script` 或 `GitVersion.Tool`。
+生成物约在 `dist/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz`。构建使用 `--runtime linux-x64` 与 `-p:SkipGitVersion=true`。
 
-手动构建代码：
+**手动编译（示例）**
 
 ```bash
 dotnet restore TS3AudioBot/TS3AudioBot.csproj --runtime linux-x64 -p:SkipGitVersion=true
@@ -186,51 +172,39 @@ NODE_OPTIONS=--openssl-legacy-provider npm ci
 NODE_OPTIONS=--openssl-legacy-provider npm run build
 ```
 
-上面的手动命令是 Linux 构建参数；需要完整压缩包时请直接使用 `run/build-linux-package.sh`。
+入口脚本在仓库 `run/`；细节实现见 `packaging/docker`、`packaging/linux`、`packaging/windows`。
 
-## 部署入口位置
+## 更换音乐 API
 
-仓库根目录的 `run/` 放置容易找到的入口脚本；底层实现仍由 `packaging/docker`、`packaging/linux` 和 `packaging/windows` 维护。
-
-## 更换 API
-
-搜索、播放链接和歌词使用**同一个**波点音乐接口，定义在 [KuwoMusicPlugin.cs](KuwoMusicPlugin/KuwoMusicPlugin.cs)：
+搜索、播放、歌词共用一个接口，定义在 [KuwoMusicPlugin/KuwoMusicPlugin.cs](KuwoMusicPlugin/KuwoMusicPlugin.cs)：
 
 ```csharp
 private const string ApiUrl = "https://api.xcvts.cn/api/music/bdyy";
 ```
 
-当前请求格式：
-
 ```text
 # 搜索列表（不要带 n）
 {ApiUrl}?msg=关键词&sc=10&type=json
 
-# 选中第 n 首：同时返回 play_url 与 lrc（二合一）
+# 选中第 n 首：同时返回 play_url 与 lrc
 {ApiUrl}?msg=关键词&n=序号&type=json
 ```
 
-`n` 可选音质参数 `bf`（如 `320kmp3`、`2000kflac`）；不填默认约 320k mp3。
-
-若接口失效，只改 `ApiUrl` 这一处。若 JSON 字段变化，同步改同文件底部的 `BdyyList*` / `BdyyDetail*` 模型，以及 `ToResource` 里对 `name`、`artist`、`cover`、`play_url`、`lrc`、`detail_page` 的映射。网页歌词走 `GET /console-api/music/lyrics`，优先用播放时缓存的 `lrc`。不要改 `MainCommands.cs`，`!search` / `!play` 仍调用该插件。
+可选音质参数 `bf`（如 `320kmp3`、`2000kflac`）。  
+接口变更时只改 `ApiUrl` 及同文件底部 JSON 模型映射。网页歌词接口：`GET /console-api/music/lyrics`。不要改 `MainCommands.cs` 中对插件的调用方式。
 
 ## GitHub Actions
 
-推送到 `main` 或 `master` 后，Actions 会自动：
+推送到 `main` / `master` 或手动运行 **Build release packages** 时会：
 
-- 构建网页控制台、机器人和酷我插件
-- 生成 Linux x64 压缩包
-- 生成 Windows x64 压缩包
-- 上传 Actions Artifact
-- 在主分支创建 GitHub Release
+- 构建网页、机器人、酷我插件  
+- 生成 Windows / Linux 发布包  
+- 上传 Artifact  
+- 创建 GitHub Release（`build-N`）  
 
-也可以在 GitHub Actions 页面手动运行 `Build release packages`。
+## 许可证与声明
 
-## 开源说明
-
-本仓库基于上游 TS3AudioBot，保留原有 [OSL-3.0](LICENSE) 许可证和版权文件。发布前请确认使用的第三方音乐 API 允许你的使用方式。
-
-## 声明
-
-- 本插件由 ChatGPT 协助开发，主要用于个人使用。
-- 音乐与歌词使用[小尘API](https://api.xcvts.cn/)。
+- 基于上游 TS3AudioBot，保留 [OSL-3.0](LICENSE) 及相关版权文件  
+- 请自行确认所用第三方音乐 API 的使用条款  
+- 本项目便于个人 / 小团队自建 TeamSpeak 点歌，按「开源工具」方式维护，非商业音乐产品  
+- 音乐与歌词接口当前使用 [小尘 API](https://api.xcvts.cn/)  
