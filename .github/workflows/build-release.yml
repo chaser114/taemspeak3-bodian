@@ -125,15 +125,39 @@ jobs:
         # Note: GitHub Actions forbids `secrets.*` inside `if:`; check token inside the script.
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         env:
+          # Prefer repository Actions secret GITCODE_TOKEN.
+          # Fallbacks help if the secret was named slightly differently.
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          GITCODE_TOKEN_ALT1: ${{ secrets.GITCODE_ACCESS_TOKEN }}
+          GITCODE_TOKEN_ALT2: ${{ secrets.GC_TOKEN }}
           TAG: build-${{ github.run_number }}
           OWNER_REPO: chaser114/taemspeak3-bodian
         run: |
           set -euo pipefail
-          if [ -z "${GITCODE_TOKEN:-}" ]; then
-            echo "GITCODE_TOKEN secret is not set; skip GitCode mirror."
+          # Resolve token from primary or alternate secret names (never print the value).
+          TOKEN="${GITCODE_TOKEN:-}"
+          TOKEN_SOURCE="GITCODE_TOKEN"
+          if [ -z "$TOKEN" ] && [ -n "${GITCODE_TOKEN_ALT1:-}" ]; then
+            TOKEN="$GITCODE_TOKEN_ALT1"
+            TOKEN_SOURCE="GITCODE_ACCESS_TOKEN"
+          fi
+          if [ -z "$TOKEN" ] && [ -n "${GITCODE_TOKEN_ALT2:-}" ]; then
+            TOKEN="$GITCODE_TOKEN_ALT2"
+            TOKEN_SOURCE="GC_TOKEN"
+          fi
+          # Trim CR/LF/spaces that sometimes sneak in when pasting secrets.
+          TOKEN=$(printf '%s' "$TOKEN" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          export GITCODE_TOKEN="$TOKEN"
+
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::No GitCode token found. Skip mirror."
+            echo "Expected a GitHub Actions repository secret named GITCODE_TOKEN"
+            echo "(Settings → Secrets and variables → Actions → Repository secrets)."
+            echo "Do NOT put it only on GitCode; GitHub Actions cannot read GitCode settings."
+            echo "After adding/updating the secret, re-run this workflow (new run required)."
             exit 0
           fi
+          echo "GitCode token loaded from secret: ${TOKEN_SOURCE} (length=${#TOKEN})"
           python3 <<'PY'
           import json
           import os
