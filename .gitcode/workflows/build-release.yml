@@ -1,0 +1,201 @@
+# GitCode / AtomGit Action
+# Docs: https://docs.gitcode.com/docs/help/home/org_project/pipeline/
+# Workflow files MUST live under .gitcode/workflows/ (not .github/workflows).
+#
+# Free official hosted runners are available (ubuntu, slim/small/medium by default).
+# Prefer small/medium so open-source free quota stays reasonable.
+
+name: Build release packages
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+env:
+  NODE_OPTIONS: --openssl-legacy-provider
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  # webpack 4 + modern Node
+  npm_config_fund: "false"
+
+permissions:
+  repository: write
+  packages: write
+
+jobs:
+  build:
+    name: Build Linux/Windows packages
+    runs-on: "{ubuntu-24,x64,medium}"
+    steps:
+      - name: Checkout
+        uses: checkout
+
+      - name: Show toolchain
+        run: |
+          set -eu
+          echo "ref=${ATOMGIT_REF:-}"
+          echo "sha=${ATOMGIT_SHA:-}"
+          echo "repo=${ATOMGIT_REPOSITORY:-}"
+          node -v
+          npm -v
+          dotnet --info | head -n 30
+          docker --version || true
+
+      - name: Select Node 18 if available
+        run: |
+          set -eu
+          if command -v n >/dev/null 2>&1; then
+            n 18 || true
+          fi
+          # Prefer nvm-style install paths if present
+          if [ -d /usr/local/lib/nodejs ]; then
+            export PATH="/usr/local/lib/nodejs/node-v18*/bin:$PATH" || true
+          fi
+          node -v
+          npm -v
+
+      - name: Restore .NET projects
+        run: |
+          set -eu
+          dotnet restore TS3AudioBot/TS3AudioBot.csproj -p:SkipGitVersion=true
+          dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj -p:SkipGitVersion=true
+
+      - name: Build bot and plugin
+        run: |
+          set -eu
+          dotnet build TS3AudioBot/TS3AudioBot.csproj --configuration Release -p:SkipGitVersion=true --no-restore
+          dotnet build KuwoMusicPlugin/KuwoMusicPlugin.csproj --configuration Release -p:SkipGitVersion=true --no-restore
+
+      - name: Build web console
+        run: |
+          set -eu
+          cd WebInterface
+          npm ci
+          npm run build
+          test -s dist/index.html
+          test -s dist/bundle.js
+          grep -Fq "bot-select-icon" dist/bundle.js
+
+      - name: Compute version tag
+        id: ver
+        run: |
+          set -eu
+          # Prefer short time+sha — AtomGit docs do not guarantee run_number like GitHub.
+          SHORT_SHA=$(printf '%s' "${ATOMGIT_SHA:-local}" | cut -c1-7)
+          STAMP=$(date -u +%Y%m%d%H%M)
+          TAG="build-${STAMP}-${SHORT_SHA}"
+          echo "TAG=$TAG" >> "$ATOMGIT_ENV"
+          echo "VERSION=$TAG" >> "$ATOMGIT_ENV"
+          echo "version=$TAG"
+          printf '%s\n' "$TAG" > artifacts-version.txt
+
+      - name: Publish Linux package
+        run: |
+          set -eu
+          chmod +x run/build-linux-package.sh packaging/linux/build-package.sh || true
+          ./run/build-linux-package.sh artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64
+          printf '%s\n' "$VERSION" > artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/VERSION
+          rm -f artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
+          tar -C artifacts/linux -czf artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz TS3AudioBot-KuwoPlugin-linux-x64
+          mkdir -p artifacts
+          mv artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
+          test -s artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
+
+      - name: Publish Windows package
+        run: |
+          set -eu
+          dotnet restore TS3AudioBot/TS3AudioBot.csproj --runtime win-x64 -p:SkipGitVersion=true
+          dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj --runtime win-x64 -p:SkipGitVersion=true
+          dotnet publish TS3AudioBot/TS3AudioBot.csproj --configuration Release --runtime win-x64 --self-contained true -p:SkipGitVersion=true --no-restore --output artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64
+          mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/plugins
+          mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/WebInterface
+          cp KuwoMusicPlugin/bin/Release/net6.0/KuwoMusicPlugin.dll artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/plugins/
+          cp -a WebInterface/dist/. artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/WebInterface/
+          # Optional: bundle ffmpeg for Windows packages (best-effort; skip if download fails).
+          if curl --fail --location --retry 3 --output /tmp/ffmpeg.zip https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip; then
+            unzip -q /tmp/ffmpeg.zip -d /tmp/ffmpeg
+            cp /tmp/ffmpeg/*/bin/ffmpeg.exe artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/ || true
+          else
+            echo "WARNING: ffmpeg download failed; Windows package will not include ffmpeg.exe"
+          fi
+          cp packaging/windows/start.bat packaging/windows/start-web-console.bat packaging/windows/README.md artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/
+          mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/run
+          mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/packaging/common
+          mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/data
+          cp run/start-web-console.bat run/update-windows.ps1 run/update-windows.bat run/stop-windows.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/run/
+          cp run/update-windows.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/
+          cp run/stop-windows.bat artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/stop.bat
+          cp packaging/common/prepare-data.ps1 packaging/common/update-in-place.ps1 artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/packaging/common/
+          printf '%s\n' "This folder stores bots, web accounts and rights. Keep it when upgrading." > artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/data/README.txt
+          printf '%s\n' "$VERSION" > artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/VERSION
+          (cd artifacts/windows && zip -qr ../TS3AudioBot-KuwoPlugin-windows-x64.zip TS3AudioBot-KuwoPlugin-windows-x64)
+          test -s artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip
+
+      - name: Upload workflow artifacts
+        uses: upload-artifact
+        with:
+          name: TS3AudioBot-KuwoPlugin-${{ atomgit.sha }}
+          path: |
+            artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
+            artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip
+          retention-days: 14
+
+      - name: Create GitCode Release (optional)
+        if: ${{ atomgit.ref == 'refs/heads/main' || atomgit.ref == 'refs/heads/master' }}
+        env:
+          # Prefer explicit project secret; fall back to workflow token.
+          RELEASE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+        run: |
+          set -eu
+          TOKEN="${RELEASE_TOKEN:-${ATOMGIT_TOKEN:-}}"
+          if [ -z "$TOKEN" ]; then
+            echo "No token available; skip creating GitCode Release. Packages remain as workflow artifacts."
+            exit 0
+          fi
+          OWNER_REPO="${ATOMGIT_REPOSITORY:-chaser114/taemspeak3-bodian}"
+          API="https://gitcode.com/api/v5/repos/${OWNER_REPO}/releases"
+          TAG="$VERSION"
+          # Create release (Gitee-compatible v5 API used by GitCode)
+          BODY=$(printf 'Automated package build from %s\n\n- Linux: TS3AudioBot-KuwoPlugin-linux-x64.tar.gz\n- Windows: TS3AudioBot-KuwoPlugin-windows-x64.zip\n' "${ATOMGIT_SHA:-}")
+          CREATE_JSON=$(curl -sS -X POST "$API" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "User-Agent: taemspeak3-bodian-gitcode-ci" \
+            -d "{\"tag_name\":\"${TAG}\",\"name\":\"Automated build ${TAG}\",\"body\":$(printf '%s' "$BODY" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),\"target_commitish\":\"main\"}" \
+            || true)
+          echo "create response: $CREATE_JSON" | head -c 500
+          # Upload assets if release id / upload_url present
+          REL_ID=$(printf '%s' "$CREATE_JSON" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("id",""))' 2>/dev/null || true)
+          if [ -z "$REL_ID" ]; then
+            # Fallback: access_token query style
+            CREATE_JSON=$(curl -sS -X POST "${API}?access_token=${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -H "User-Agent: taemspeak3-bodian-gitcode-ci" \
+              -d "{\"tag_name\":\"${TAG}\",\"name\":\"Automated build ${TAG}\",\"body\":\"Automated package build\",\"target_commitish\":\"main\"}" \
+              || true)
+            REL_ID=$(printf '%s' "$CREATE_JSON" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("id",""))' 2>/dev/null || true)
+          fi
+          if [ -z "$REL_ID" ]; then
+            echo "Could not create release automatically. Download artifacts from the pipeline run and attach them on the Releases page."
+            exit 0
+          fi
+          for f in \
+            artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz \
+            artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip
+          do
+            name=$(basename "$f")
+            echo "Uploading $name to release $REL_ID ..."
+            curl -sS -X POST \
+              "https://gitcode.com/api/v5/repos/${OWNER_REPO}/releases/${REL_ID}/attach_files" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "User-Agent: taemspeak3-bodian-gitcode-ci" \
+              -F "file=@${f}" \
+              || curl -sS -X POST \
+              "https://gitcode.com/api/v5/repos/${OWNER_REPO}/releases/${REL_ID}/attach_files?access_token=${TOKEN}" \
+              -H "User-Agent: taemspeak3-bodian-gitcode-ci" \
+              -F "file=@${f}" \
+              || echo "upload failed for $name (attach manually if needed)"
+          done

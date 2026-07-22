@@ -92,8 +92,9 @@ start-web-console.bat
 
 说明：
 
-- **构建在 GitHub Actions**；**GitCode** 作国内源码镜像 + 国内下载源（Releases）  
-- 发布包需同步到 **GitCode Releases**（https://gitcode.com/chaser114/taemspeak3-bodian）后，国内「GitCode 更新」才可用  
+- **构建**：GitHub Actions（`.github/workflows/`）+ GitCode 流水线（`.gitcode/workflows/`，官方托管 Runner，开箱即用）  
+- **国内下载源**：GitCode Releases（https://gitcode.com/chaser114/taemspeak3-bodian）  
+- GitCode 推送 `main` 后会自动打包；发行版可在流水线制品中下载，或由流水线尝试创建 Release（需仓库写权限 / 可选 `GITCODE_TOKEN`）  
 - **Docker 部署**请继续用 `docker compose up -d --build`，网页升级需要可写的安装目录，容器镜像层通常不适用  
 - 包内 `VERSION` 文件记录当前 `build-N` 版本号
 
