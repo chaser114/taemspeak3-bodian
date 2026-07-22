@@ -92,9 +92,11 @@ start-web-console.bat
 
 说明：
 
-- **构建**：GitHub Actions（`.github/workflows/`）+ GitCode 流水线（`.gitcode/workflows/`，官方托管 Runner，开箱即用）  
-- **国内下载源**：GitCode Releases（https://gitcode.com/chaser114/taemspeak3-bodian）  
-- GitCode 推送 `main` 后会自动打包；发行版可在流水线制品中下载，或由流水线尝试创建 Release（需仓库写权限 / 可选 `GITCODE_TOKEN`）  
+- **构建**：GitHub Actions 自动打 Win/Linux 包并发布 GitHub Release  
+- **国内源自动同步**：同一流水线会把安装包镜像到 **GitCode Releases**（无需每天手动上传）  
+- **一次配置**：GitHub 仓库 → Settings → Secrets and variables → Actions → 新建 `GITCODE_TOKEN`（GitCode 私人令牌，需仓库/发行版写权限）  
+- 未配置 Token 时：GitHub 照常发版；国内「GitCode 更新」暂时没有新包，可用「GitHub 更新」  
+- GitCode 流水线（`.gitcode/workflows/`）可选；若平台需单独申请可忽略  
 - **Docker 部署**请继续用 `docker compose up -d --build`，网页升级需要可写的安装目录，容器镜像层通常不适用  
 - 包内 `VERSION` 文件记录当前 `build-N` 版本号
 

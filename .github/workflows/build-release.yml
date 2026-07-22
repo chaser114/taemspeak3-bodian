@@ -117,3 +117,99 @@ jobs:
           files: |
             artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
             artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip
+
+      # Mirror packages to GitCode Releases so domestic "GitCode 更新" works without manual upload.
+      # One-time setup: GitHub repo Settings → Secrets → Actions → GITCODE_TOKEN
+      # (GitCode personal access token with repository write / release permission)
+      - name: Mirror release to GitCode
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && secrets.GITCODE_TOKEN != ''
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          TAG: build-${{ github.run_number }}
+          OWNER_REPO: chaser114/taemspeak3-bodian
+        run: |
+          set -euo pipefail
+          API="https://gitcode.com/api/v5/repos/${OWNER_REPO}/releases"
+          BODY="Automated mirror of GitHub release ${TAG} (${GITHUB_SHA})."
+          echo "Creating GitCode release ${TAG}..."
+          CREATE_JSON=$(curl -sS -X POST "${API}" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${GITCODE_TOKEN}" \
+            -H "User-Agent: taemspeak3-bodian-github-ci" \
+            -d "$(python3 - <<PY
+          import json, os
+          print(json.dumps({
+            "tag_name": os.environ["TAG"],
+            "name": f"Automated build {os.environ['TAG']}",
+            "body": os.environ["BODY"],
+            "target_commitish": "main",
+            "prerelease": False,
+          }))
+          PY
+          )" || true)
+
+          # Fallback: access_token query (Gitee-compatible style used by some GitCode endpoints)
+          REL_ID=$(printf '%s' "${CREATE_JSON}" | python3 -c 'import sys,json
+          try:
+            d=json.load(sys.stdin); print(d.get("id") or "")
+          except Exception:
+            print("")' || true)
+          if [ -z "${REL_ID}" ]; then
+            echo "Bearer create failed, retry with access_token query..."
+            CREATE_JSON=$(curl -sS -X POST "${API}?access_token=${GITCODE_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -H "User-Agent: taemspeak3-bodian-github-ci" \
+              -d "{\"tag_name\":\"${TAG}\",\"name\":\"Automated build ${TAG}\",\"body\":\"${BODY}\",\"target_commitish\":\"main\"}" || true)
+            REL_ID=$(printf '%s' "${CREATE_JSON}" | python3 -c 'import sys,json
+          try:
+            d=json.load(sys.stdin); print(d.get("id") or "")
+          except Exception:
+            print("")' || true)
+          fi
+
+          if [ -z "${REL_ID}" ]; then
+            # Maybe release already exists for this tag — try list/latest lookup by tag
+            echo "Create returned no id; trying to find existing release for ${TAG}..."
+            LIST_JSON=$(curl -sS -H "Authorization: Bearer ${GITCODE_TOKEN}" -H "User-Agent: taemspeak3-bodian-github-ci" \
+              "${API}?access_token=${GITCODE_TOKEN}&per_page=20" || true)
+            REL_ID=$(printf '%s' "${LIST_JSON}" | python3 -c 'import sys,json,os
+          try:
+            arr=json.load(sys.stdin)
+            tag=os.environ["TAG"]
+            for x in arr if isinstance(arr,list) else []:
+              if x.get("tag_name")==tag or x.get("name")==tag:
+                print(x.get("id") or ""); break
+          except Exception:
+            print("")' || true)
+          fi
+
+          if [ -z "${REL_ID}" ]; then
+            echo "::warning::Could not create/find GitCode release ${TAG}. Domestic GitCode update will miss this build until fixed."
+            echo "Response: ${CREATE_JSON:-}" | head -c 800
+            exit 0
+          fi
+
+          echo "GitCode release id=${REL_ID}"
+          for f in \
+            artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz \
+            artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip
+          do
+            name=$(basename "$f")
+            echo "Uploading ${name}..."
+            # Common Gitee-style attach endpoint
+            code=$(curl -sS -o /tmp/gc-upload.json -w "%{http_code}" -X POST \
+              "https://gitcode.com/api/v5/repos/${OWNER_REPO}/releases/${REL_ID}/attach_files" \
+              -H "Authorization: Bearer ${GITCODE_TOKEN}" \
+              -H "User-Agent: taemspeak3-bodian-github-ci" \
+              -F "file=@${f}" || echo "000")
+            if [ "${code}" != "200" ] && [ "${code}" != "201" ]; then
+              code=$(curl -sS -o /tmp/gc-upload.json -w "%{http_code}" -X POST \
+                "https://gitcode.com/api/v5/repos/${OWNER_REPO}/releases/${REL_ID}/attach_files?access_token=${GITCODE_TOKEN}" \
+                -H "User-Agent: taemspeak3-bodian-github-ci" \
+                -F "file=@${f}" || echo "000")
+            fi
+            echo "upload ${name} http=${code}"
+            head -c 300 /tmp/gc-upload.json || true
+            echo
+          done
+          echo "GitCode mirror finished for ${TAG}."
