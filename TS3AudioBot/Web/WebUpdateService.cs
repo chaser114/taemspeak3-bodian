@@ -25,11 +25,16 @@ namespace TS3AudioBot.Web
 		private static readonly HttpClient Http = CreateHttpClient();
 		private static int busy;
 
-		// Public release channels. Domestic default is GitCode (Gitee release quota is limited).
+		// Public release channels. The Bodian mirror is the default because its files are
+		// served directly from the public download site without requiring WebDAV credentials.
 		private const string GithubOwner = "chaser114";
 		private const string GithubRepo = "taemspeak3-bodian";
 		private const string GitcodeOwner = "chaser114";
 		private const string GitcodeRepo = "taemspeak3-bodian";
+		private const string BodianBaseUrl = "https://teamspeak3.358817.xyz";
+		private const string BodianVersionUrl = BodianBaseUrl + "/VERSION.txt";
+		private const string BodianLinuxAssetUrl = BodianBaseUrl + "/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz";
+		private const string BodianWindowsAssetUrl = BodianBaseUrl + "/TS3AudioBot-KuwoPlugin-windows-x64.zip";
 
 		public string InstallRoot { get; }
 		public string CurrentVersion { get; }
@@ -49,8 +54,8 @@ namespace TS3AudioBot.Web
 				busy = Volatile.Read(ref busy) != 0,
 				sources = new object[]
 				{
-					// Default: GitHub metadata + domestic proxy download. No third-party package upload.
-					new { id = "github-cn", label = "国内加速（推荐）", defaultSource = true },
+					new { id = "bodian", label = "波点下载站（推荐）", defaultSource = true },
+					new { id = "github-cn", label = "GitHub 国内加速", defaultSource = false },
 					new { id = "github", label = "GitHub 官方源", defaultSource = false },
 				}
 			};
@@ -60,21 +65,38 @@ namespace TS3AudioBot.Web
 		{
 			var platform = DetectPlatform();
 			var errors = new List<string>();
+			ReleaseInfo? bodian = null;
 			ReleaseInfo? github = null;
+			var bodianTask = FetchLatestAsync("bodian", platform);
+			var githubTask = FetchLatestAsync("github", platform);
 
-			try { github = await FetchLatestAsync("github", platform); }
+			try { bodian = await bodianTask; }
+			catch (Exception ex) { errors.Add("波点下载站: " + ex.Message); Log.Warn(ex, "Bodian update check failed."); }
+
+			try { github = await githubTask; }
 			catch (Exception ex) { errors.Add("GitHub: " + ex.Message); Log.Warn(ex, "GitHub update check failed."); }
 
 			// github-cn reuses GitHub release metadata, only rewrites download URL via proxy.
 			var githubCn = github is null ? null : CloneWithProxiedUrl(github);
 
 			var preferred = NormalizeSource(preferredSource);
-			ReleaseInfo? selected = preferred == "github"
-				? (github ?? githubCn)
-				: (githubCn ?? github);
-			var selectedSource = selected is null
-				? preferred
-				: (preferred == "github" && github != null && ReferenceEquals(selected, github) ? "github" : "github-cn");
+			ReleaseInfo? selected;
+			string? selectedSource;
+			if (preferred == "github")
+			{
+				selected = github ?? githubCn ?? bodian;
+				selectedSource = selected == github ? "github" : selected == githubCn ? "github-cn" : selected == bodian ? "bodian" : null;
+			}
+			else if (preferred == "github-cn")
+			{
+				selected = githubCn ?? github ?? bodian;
+				selectedSource = selected == githubCn ? "github-cn" : selected == github ? "github" : selected == bodian ? "bodian" : null;
+			}
+			else
+			{
+				selected = bodian ?? githubCn ?? github;
+				selectedSource = selected == bodian ? "bodian" : selected == githubCn ? "github-cn" : selected == github ? "github" : null;
+			}
 
 			var hasUpdate = selected != null && IsNewer(selected.Tag, CurrentVersion);
 			return new
@@ -92,8 +114,16 @@ namespace TS3AudioBot.Web
 				{
 					new
 					{
+						id = "bodian",
+						label = "波点下载站（推荐）",
+						available = bodian != null,
+						latestVersion = bodian?.Tag,
+						hasUpdate = bodian != null && IsNewer(bodian.Tag, CurrentVersion),
+					},
+					new
+					{
 						id = "github-cn",
-						label = "国内加速（推荐）",
+						label = "GitHub 国内加速",
 						available = githubCn != null,
 						latestVersion = githubCn?.Tag,
 						hasUpdate = githubCn != null && IsNewer(githubCn.Tag, CurrentVersion),
@@ -181,6 +211,9 @@ namespace TS3AudioBot.Web
 
 		private static async Task<ReleaseInfo> FetchLatestAsync(string source, string platform)
 		{
+			if (source == "bodian")
+				return await FetchBodianLatestAsync(platform);
+
 			// github-cn: same metadata as GitHub, package download via CN proxy.
 			var apiSource = source == "gitcode" ? "gitcode" : "github";
 			string apiUrl = apiSource == "gitcode"
@@ -219,6 +252,34 @@ namespace TS3AudioBot.Web
 				PublishedAt = published,
 				AssetName = asset.Value.name,
 				AssetUrl = url,
+			};
+		}
+
+		private static async Task<ReleaseInfo> FetchBodianLatestAsync(string platform)
+		{
+			using var req = new HttpRequestMessage(HttpMethod.Get, BodianVersionUrl);
+			req.Headers.TryAddWithoutValidation("Accept", "text/plain");
+			req.Headers.TryAddWithoutValidation("User-Agent", "taemspeak3-bodian-updater");
+
+			using var resp = await Http.SendAsync(req);
+			var body = await resp.Content.ReadAsStringAsync();
+			if (!resp.IsSuccessStatusCode)
+				throw new InvalidOperationException($"无法获取波点下载站版本号（HTTP {(int)resp.StatusCode}）。");
+
+			var tag = body
+				.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+				.Select(line => line.Trim())
+				.FirstOrDefault();
+			if (string.IsNullOrWhiteSpace(tag) || tag.Any(char.IsWhiteSpace) || tag.IndexOfAny(new[] { '<', '>', '\0' }) >= 0)
+				throw new InvalidOperationException("波点下载站 VERSION.txt 返回了无效版本号。");
+
+			var windows = platform == "windows";
+			return new ReleaseInfo
+			{
+				Tag = tag,
+				Notes = "版本号来自波点公开下载站。",
+				AssetName = windows ? "TS3AudioBot-KuwoPlugin-windows-x64.zip" : "TS3AudioBot-KuwoPlugin-linux-x64.tar.gz",
+				AssetUrl = windows ? BodianWindowsAssetUrl : BodianLinuxAssetUrl,
 			};
 		}
 
@@ -607,11 +668,13 @@ rm -rf ""$dst/.update-staging""
 
 		private static string NormalizeSource(string? source)
 		{
-			if (string.IsNullOrWhiteSpace(source)) return "github-cn";
+			if (string.IsNullOrWhiteSpace(source)) return "bodian";
 			var s = source.Trim().ToLowerInvariant();
+			if (s == "bodian" || s == "bodian-cn") return "bodian";
 			if (s == "github") return "github";
 			// gitcode/gitee and other domestic labels → GitHub + CN proxy.
-			return "github-cn";
+			if (s == "github-cn" || s == "gitcode" || s == "gitee") return "github-cn";
+			return "bodian";
 		}
 
 		private static ReleaseInfo CloneWithProxiedUrl(ReleaseInfo src)
