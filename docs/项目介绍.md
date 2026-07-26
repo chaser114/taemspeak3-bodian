@@ -126,7 +126,7 @@ start-web-console.bat
 
 | 选项 | 说明 |
 |------|------|
-| **国内加速（推荐）** | 版本信息来自 GitHub，安装包经国内代理（如 ghproxy）下载 |
+| **EdgeOne 加速（推荐）** | 原波点下载源，仅修改显示名称 |
 | **GitHub 官方源** | 直连 GitHub Releases |
 
 构建与发版只依赖 **GitHub Actions → GitHub Releases**。  

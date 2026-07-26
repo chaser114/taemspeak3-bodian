@@ -29,8 +29,6 @@ namespace TS3AudioBot.Web
 		// served directly from the public download site without requiring WebDAV credentials.
 		private const string GithubOwner = "chaser114";
 		private const string GithubRepo = "taemspeak3-bodian";
-		private const string GitcodeOwner = "chaser114";
-		private const string GitcodeRepo = "taemspeak3-bodian";
 		private const string BodianBaseUrl = "https://teamspeak3.358817.xyz";
 		private const string BodianVersionUrl = BodianBaseUrl + "/VERSION.txt";
 		private const string BodianLinuxAssetUrl = BodianBaseUrl + "/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz";
@@ -54,8 +52,7 @@ namespace TS3AudioBot.Web
 				busy = Volatile.Read(ref busy) != 0,
 				sources = new object[]
 				{
-					new { id = "bodian", label = "波点下载站（推荐）", defaultSource = true },
-					new { id = "github-cn", label = "GitHub 国内加速", defaultSource = false },
+					new { id = "bodian", label = "EdgeOne 加速（推荐）", defaultSource = true },
 					new { id = "github", label = "GitHub 官方源", defaultSource = false },
 				}
 			};
@@ -71,32 +68,14 @@ namespace TS3AudioBot.Web
 			var githubTask = FetchLatestAsync("github", platform);
 
 			try { bodian = await bodianTask; }
-			catch (Exception ex) { errors.Add("波点下载站: " + ex.Message); Log.Warn(ex, "Bodian update check failed."); }
+			catch (Exception ex) { errors.Add("EdgeOne 加速: " + ex.Message); Log.Warn(ex, "Bodian update check failed."); }
 
 			try { github = await githubTask; }
 			catch (Exception ex) { errors.Add("GitHub: " + ex.Message); Log.Warn(ex, "GitHub update check failed."); }
 
-			// github-cn reuses GitHub release metadata, only rewrites download URL via proxy.
-			var githubCn = github is null ? null : CloneWithProxiedUrl(github);
-
 			var preferred = NormalizeSource(preferredSource);
-			ReleaseInfo? selected;
-			string? selectedSource;
-			if (preferred == "github")
-			{
-				selected = github ?? githubCn ?? bodian;
-				selectedSource = selected == github ? "github" : selected == githubCn ? "github-cn" : selected == bodian ? "bodian" : null;
-			}
-			else if (preferred == "github-cn")
-			{
-				selected = githubCn ?? github ?? bodian;
-				selectedSource = selected == githubCn ? "github-cn" : selected == github ? "github" : selected == bodian ? "bodian" : null;
-			}
-			else
-			{
-				selected = bodian ?? githubCn ?? github;
-				selectedSource = selected == bodian ? "bodian" : selected == githubCn ? "github-cn" : selected == github ? "github" : null;
-			}
+			var selected = preferred == "github" ? (github ?? bodian) : (bodian ?? github);
+			var selectedSource = selected is null ? null : ReferenceEquals(selected, github) ? "github" : "bodian";
 
 			var hasUpdate = selected != null && IsNewer(selected.Tag, CurrentVersion);
 			return new
@@ -115,18 +94,10 @@ namespace TS3AudioBot.Web
 					new
 					{
 						id = "bodian",
-						label = "波点下载站（推荐）",
+						label = "EdgeOne 加速（推荐）",
 						available = bodian != null,
 						latestVersion = bodian?.Tag,
 						hasUpdate = bodian != null && IsNewer(bodian.Tag, CurrentVersion),
-					},
-					new
-					{
-						id = "github-cn",
-						label = "GitHub 国内加速",
-						available = githubCn != null,
-						latestVersion = githubCn?.Tag,
-						hasUpdate = githubCn != null && IsNewer(githubCn.Tag, CurrentVersion),
 					},
 					new
 					{
@@ -214,11 +185,7 @@ namespace TS3AudioBot.Web
 			if (source == "bodian")
 				return await FetchBodianLatestAsync(platform);
 
-			// github-cn: same metadata as GitHub, package download via CN proxy.
-			var apiSource = source == "gitcode" ? "gitcode" : "github";
-			string apiUrl = apiSource == "gitcode"
-				? $"https://gitcode.com/api/v5/repos/{GitcodeOwner}/{GitcodeRepo}/releases/latest"
-				: $"https://api.github.com/repos/{GithubOwner}/{GithubRepo}/releases/latest";
+			var apiUrl = $"https://api.github.com/repos/{GithubOwner}/{GithubRepo}/releases/latest";
 
 			using var req = new HttpRequestMessage(HttpMethod.Get, apiUrl);
 			req.Headers.TryAddWithoutValidation("Accept", "application/json");
@@ -237,13 +204,9 @@ namespace TS3AudioBot.Web
 			var notes = json.Value<string>("body") ?? string.Empty;
 			var published = json.Value<string>("created_at") ?? json.Value<string>("published_at");
 			var assets = json["assets"] as JArray ?? new JArray();
-			var asset = PickAsset(assets, platform, apiSource);
+			var asset = PickAsset(assets, platform);
 			if (asset is null)
 				throw new InvalidOperationException($"{source} 最新版本中没有适用于 {platform} 的安装包。");
-
-			var url = asset.Value.url;
-			if (source == "github-cn")
-				url = ToGithubCnProxyUrl(url);
 
 			return new ReleaseInfo
 			{
@@ -251,7 +214,7 @@ namespace TS3AudioBot.Web
 				Notes = Truncate(notes, 2000),
 				PublishedAt = published,
 				AssetName = asset.Value.name,
-				AssetUrl = url,
+				AssetUrl = asset.Value.url,
 			};
 		}
 
@@ -264,29 +227,29 @@ namespace TS3AudioBot.Web
 			using var resp = await Http.SendAsync(req);
 			var body = await resp.Content.ReadAsStringAsync();
 			if (!resp.IsSuccessStatusCode)
-				throw new InvalidOperationException($"无法获取波点下载站版本号（HTTP {(int)resp.StatusCode}）。");
+				throw new InvalidOperationException($"无法获取 EdgeOne 加速版本号（HTTP {(int)resp.StatusCode}）。");
 
 			var tag = body
 				.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
 				.Select(line => line.Trim())
 				.FirstOrDefault();
 			if (string.IsNullOrWhiteSpace(tag) || tag.Any(char.IsWhiteSpace) || tag.IndexOfAny(new[] { '<', '>', '\0' }) >= 0)
-				throw new InvalidOperationException("波点下载站 VERSION.txt 返回了无效版本号。");
+				throw new InvalidOperationException("EdgeOne 加速 VERSION.txt 返回了无效版本号。");
 
 			var windows = platform == "windows";
 			return new ReleaseInfo
 			{
 				Tag = tag,
-				Notes = "版本号来自波点公开下载站。",
+				Notes = string.Empty,
 				AssetName = windows ? "TS3AudioBot-KuwoPlugin-windows-x64.zip" : "TS3AudioBot-KuwoPlugin-linux-x64.tar.gz",
 				AssetUrl = windows ? BodianWindowsAssetUrl : BodianLinuxAssetUrl,
 			};
 		}
 
-		private static (string name, string url)? PickAsset(JArray assets, string platform, string source)
+		private static (string name, string url)? PickAsset(JArray assets, string platform)
 		{
 			// Prefer canonical package names from CI.
-			// Important: GitCode auto-attaches source archives (type=source, e.g. build-44.zip).
+			// Automated release providers may attach source archives beside install packages.
 			// Never treat those as install packages.
 			string[] prefer = platform == "windows"
 				? new[] { "TS3AudioBot-KuwoPlugin-windows-x64.zip", "windows-x64.zip", "windows-x64" }
@@ -298,7 +261,7 @@ namespace TS3AudioBot.Web
 				{
 					var name = a.Value<string>("name") ?? string.Empty;
 					var assetType = a.Value<string>("type") ?? string.Empty;
-					// GitHub: browser_download_url; GitCode/Gitee-style may use browser_download_url / download_url / url.
+					// GitHub release assets normally expose browser_download_url.
 					var url = a.Value<string>("browser_download_url")
 						?? a.Value<string>("download_url")
 						?? a.Value<string>("url");
@@ -340,7 +303,7 @@ namespace TS3AudioBot.Web
 
 		private static bool IsSourceArchiveName(string name)
 		{
-			// GitCode auto source names: build-44.zip / build-44.tar.gz / ...
+			// Automated source names: build-44.zip / build-44.tar.gz / ...
 			if (string.IsNullOrWhiteSpace(name)) return false;
 			var n = name.Trim();
 			if (n.StartsWith("Source", StringComparison.OrdinalIgnoreCase)) return true;
@@ -351,67 +314,25 @@ namespace TS3AudioBot.Web
 
 		private static async Task DownloadFileAsync(string url, string path)
 		{
-			var candidates = BuildDownloadCandidates(url);
-			Exception? last = null;
-			foreach (var candidate in candidates)
-			{
-				try
-				{
-					using var req = new HttpRequestMessage(HttpMethod.Get, candidate);
-					req.Headers.TryAddWithoutValidation("User-Agent", "taemspeak3-bodian-updater");
-					using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-					if (!resp.IsSuccessStatusCode)
-					{
-						last = new InvalidOperationException($"HTTP {(int)resp.StatusCode} from {candidate}");
-						Log.Warn("Download candidate failed: {0}", last.Message);
-						continue;
-					}
-					await using var input = await resp.Content.ReadAsStreamAsync();
-					await using var output = File.Create(path);
-					await input.CopyToAsync(output);
-					if (candidate != url)
-						Log.Info("Downloaded update package via proxy: {0}", candidate);
-					return;
-				}
-				catch (Exception ex)
-				{
-					last = ex;
-					Log.Warn(ex, "Download candidate failed: {0}", candidate);
-				}
-			}
-			throw new InvalidOperationException("下载更新包失败：" + (last?.Message ?? "所有下载地址均不可用。"), last);
-		}
-
-		private static IEnumerable<string> BuildDownloadCandidates(string url)
-		{
 			if (string.IsNullOrWhiteSpace(url))
-				yield break;
+				throw new InvalidOperationException("下载更新包失败：下载地址为空。");
 
-			// If already a proxy URL, try it first then strip to direct.
-			if (url.StartsWith("https://ghproxy.net/", StringComparison.OrdinalIgnoreCase)
-				|| url.StartsWith("https://mirror.ghproxy.com/", StringComparison.OrdinalIgnoreCase)
-				|| url.StartsWith("https://gh.ddlc.top/", StringComparison.OrdinalIgnoreCase)
-				|| url.StartsWith("https://gitclone.com/", StringComparison.OrdinalIgnoreCase))
+			try
 			{
-				yield return url;
-				var direct = url
-					.Replace("https://ghproxy.net/", "", StringComparison.OrdinalIgnoreCase)
-					.Replace("https://mirror.ghproxy.com/", "", StringComparison.OrdinalIgnoreCase)
-					.Replace("https://gh.ddlc.top/", "", StringComparison.OrdinalIgnoreCase);
-				if (direct.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-					yield return direct;
-				yield break;
+				using var req = new HttpRequestMessage(HttpMethod.Get, url);
+				req.Headers.TryAddWithoutValidation("User-Agent", "taemspeak3-bodian-updater");
+				using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+				if (!resp.IsSuccessStatusCode)
+					throw new InvalidOperationException($"HTTP {(int)resp.StatusCode} from {url}");
+				await using var input = await resp.Content.ReadAsStreamAsync();
+				await using var output = File.Create(path);
+				await input.CopyToAsync(output);
 			}
-
-			// Proxied first (domestic), then direct GitHub.
-			if (url.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase)
-				|| url.IndexOf("githubusercontent.com/", StringComparison.OrdinalIgnoreCase) >= 0)
+			catch (Exception ex)
 			{
-				yield return "https://ghproxy.net/" + url;
-				yield return "https://mirror.ghproxy.com/" + url;
-				yield return "https://gh.ddlc.top/" + url;
+				Log.Warn(ex, "Download failed: {0}", url);
+				throw new InvalidOperationException("下载更新包失败：" + ex.Message, ex);
 			}
-			yield return url;
 		}
 
 		private static void ExtractPackage(string packagePath, string extractDir)
@@ -672,45 +593,7 @@ rm -rf ""$dst/.update-staging""
 			var s = source.Trim().ToLowerInvariant();
 			if (s == "bodian" || s == "bodian-cn") return "bodian";
 			if (s == "github") return "github";
-			// gitcode/gitee and other domestic labels → GitHub + CN proxy.
-			if (s == "github-cn" || s == "gitcode" || s == "gitee") return "github-cn";
 			return "bodian";
-		}
-
-		private static ReleaseInfo CloneWithProxiedUrl(ReleaseInfo src)
-		{
-			return new ReleaseInfo
-			{
-				Tag = src.Tag,
-				Notes = src.Notes,
-				PublishedAt = src.PublishedAt,
-				AssetName = src.AssetName,
-				AssetUrl = ToGithubCnProxyUrl(src.AssetUrl),
-			};
-		}
-
-		/// <summary>
-		/// Rewrite github.com / githubusercontent download URLs through a public CN proxy.
-		/// Metadata still comes from GitHub API; only the package blob download is proxied.
-		/// </summary>
-		private static string ToGithubCnProxyUrl(string url)
-		{
-			if (string.IsNullOrWhiteSpace(url)) return url;
-			// Already proxied
-			if (url.StartsWith("https://ghproxy.net/", StringComparison.OrdinalIgnoreCase)
-				|| url.StartsWith("https://mirror.ghproxy.com/", StringComparison.OrdinalIgnoreCase)
-				|| url.StartsWith("https://gh.ddlc.top/", StringComparison.OrdinalIgnoreCase))
-				return url;
-
-			// Prefer ghproxy.net for release assets.
-			if (url.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase)
-				|| url.StartsWith("https://objects.githubusercontent.com/", StringComparison.OrdinalIgnoreCase)
-				|| url.StartsWith("https://release-assets.githubusercontent.com/", StringComparison.OrdinalIgnoreCase)
-				|| url.IndexOf("githubusercontent.com/", StringComparison.OrdinalIgnoreCase) >= 0)
-			{
-				return "https://ghproxy.net/" + url;
-			}
-			return url;
 		}
 
 		internal static bool IsNewer(string remoteTag, string current)

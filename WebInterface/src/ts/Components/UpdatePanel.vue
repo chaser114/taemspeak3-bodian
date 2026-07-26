@@ -87,8 +87,7 @@ export default Vue.extend({
       notes: "",
       source: "bodian",
       sources: [
-        { id: "bodian", label: "波点下载站（推荐）", available: true },
-        { id: "github-cn", label: "GitHub 国内加速", available: true },
+        { id: "bodian", label: "EdgeOne 加速（推荐）", available: true },
         { id: "github", label: "GitHub 官方源", available: true },
       ] as SourceInfo[],
       password: "",

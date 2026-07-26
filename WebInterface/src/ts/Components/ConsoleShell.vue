@@ -22,7 +22,6 @@
           <span>{{ displayVersion }}</span>
           <em v-if="hasUpdate">有更新</em>
         </button>
-        <button type="button" class="logout" title="退出登录" @click="logout"><i class="symbol">⇥</i><span>退出登录</span></button>
       </div>
     </aside>
 
@@ -38,8 +37,9 @@
           <button type="submit" title="搜索">→</button>
         </form>
         <div class="account">
-          <span>{{ brandName }}</span>
-          <i class="symbol">●</i>
+          <span class="account-name">{{ botName || brandName }}</span>
+          <span :class="['connection-dot', connectionState]" :title="connectionTitle" :aria-label="connectionTitle"></span>
+          <button type="button" class="account-logout" title="退出登录" @click="logout"><i class="symbol">⇥</i><span>退出</span></button>
         </div>
       </header>
       <main class="shell-content"><slot/></main>
@@ -49,7 +49,6 @@
       <router-link to="/music" title="点歌"><i class="symbol">⌕</i><span>点歌</span></router-link>
       <router-link to="/recent" title="最近播放"><i class="symbol">↶</i><span>最近</span></router-link>
       <router-link v-if="isAdmin" to="/admin" title="管理"><i class="symbol">⚙</i><span>管理</span></router-link>
-      <button type="button" title="退出登录" @click="logout"><i class="symbol">⇥</i><span>退出</span></button>
     </nav>
 
     <UpdatePanel :open="updateOpen" @close="updateOpen = false" @applied="onApplied"/>
@@ -59,7 +58,7 @@
 
 <script lang="ts">
 import Vue from "vue";
-import { consoleApi, ConsoleUser } from "../ConsoleApi";
+import { consoleApi, ConsoleUser, ConsoleBot } from "../ConsoleApi";
 import UpdatePanel from "./UpdatePanel.vue";
 import DescriptionPermissionNotice from "./DescriptionPermissionNotice.vue";
 
@@ -68,18 +67,27 @@ export default Vue.extend({
   data() {
     return {
       brandName: "波点音乐",
+      botName: "",
       isAdmin: false,
       query: "",
       currentVersion: "",
       hasUpdate: false,
       updateOpen: false,
       pollTimer: 0 as any,
+      connectionTimer: 0 as any,
+      connectionState: "offline" as "connected" | "connecting" | "offline",
     };
   },
   computed: {
     displayVersion(): string {
       const v = this.currentVersion || "unknown";
       return v.startsWith("v") || v.startsWith("build") ? v : ("v" + v);
+    },
+    connectionLabel(): string {
+      return this.connectionState === "connected" ? "已连接" : this.connectionState === "connecting" ? "连接中" : "离线";
+    },
+    connectionTitle(): string {
+      return "机器人状态：" + this.connectionLabel;
     },
   },
   async created() {
@@ -95,12 +103,15 @@ export default Vue.extend({
           if (notice && notice.check) notice.check(true);
         });
       }
+      await this.refreshConnectionStatus();
+      this.connectionTimer = setInterval(() => this.refreshConnectionStatus(), 5000);
     } catch (_) {
       this.$router.replace("/");
     }
   },
   beforeDestroy() {
     if (this.pollTimer) clearInterval(this.pollTimer);
+    if (this.connectionTimer) clearInterval(this.connectionTimer);
   },
   methods: {
     submitSearch() {
@@ -122,11 +133,27 @@ export default Vue.extend({
       try {
         const status = await consoleApi<{ currentVersion?: string }>("update/status");
         this.currentVersion = status.currentVersion || "";
-        const check = await consoleApi<{ hasUpdate?: boolean; currentVersion?: string; latestVersion?: string }>("update/check", { source: "github-cn" });
+        const check = await consoleApi<{ hasUpdate?: boolean; currentVersion?: string; latestVersion?: string }>("update/check", { source: "bodian" });
         if (check.currentVersion) this.currentVersion = check.currentVersion;
         this.hasUpdate = !!check.hasUpdate;
       } catch (_) {
-        // Silent: network / gitcode downtime should not break the console shell.
+        // Silent: release-source downtime should not break the console shell.
+      }
+    },
+    async refreshConnectionStatus() {
+      try {
+        const result = await consoleApi<{ bots?: ConsoleBot[] }>("bots");
+        const bots = result.bots || [];
+        const current = bots.find(bot => bot.status === "connected")
+          || bots.find(bot => bot.status === "connecting")
+          || bots[0];
+        this.botName = current && current.name ? current.name : "";
+        const statuses = bots.map(bot => bot.status);
+        this.connectionState = statuses.indexOf("connected") >= 0
+          ? "connected"
+          : statuses.indexOf("connecting") >= 0 ? "connecting" : "offline";
+      } catch (_) {
+        this.connectionState = "offline";
       }
     },
   },
@@ -151,7 +178,7 @@ export default Vue.extend({
   box-shadow: 0 6px 14px rgba(79, 184, 168, 0.28);
 }
 .side nav { display: grid; gap: 6px; margin-top: 40px; }
-.side nav a, .logout {
+.side nav a {
   height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 14px; border: 0;
   border-radius: var(--console-radius-sm); background: transparent; color: #647182;
   font: inherit; text-decoration: none; cursor: pointer;
@@ -174,8 +201,6 @@ export default Vue.extend({
 .version-chip.update {
   border-color: #f0d48a; background: var(--console-warn-soft); color: #8a6500;
 }
-.logout { width: 100%; color: #7e8792; }
-.logout:hover { background: #f3f5f6; color: var(--console-ink); }
 .shell-main { min-width: 0; flex: 1; margin-left: 220px; padding-bottom: calc(var(--console-player-h) + 12px); }
 .header {
   height: 72px; display: flex; align-items: center; gap: 16px; padding: 0 28px;
@@ -205,6 +230,14 @@ export default Vue.extend({
   cursor: pointer; font-size: 18px;
 }
 .account { margin-left: auto; display: flex; align-items: center; gap: 8px; color: #778494; font-size: 13px; }
+.connection-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: #aab5c0; box-shadow: 0 0 0 3px rgba(170, 181, 192, 0.14); }
+.connection-dot.connected { background: #35b878; box-shadow: 0 0 0 3px rgba(53, 184, 120, 0.16); }
+.connection-dot.connecting { background: #e0a52f; box-shadow: 0 0 0 3px rgba(224, 165, 47, 0.16); }
+.account-logout {
+  height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px;
+  border: 0; border-radius: var(--console-radius-sm); background: transparent; color: #778494; cursor: pointer;
+}
+.account-logout:hover { background: #f3f5f6; color: var(--console-ink); }
 .shell-content { min-height: calc(100vh - 72px); }
 .mobile-nav { display: none; }
 
@@ -217,7 +250,9 @@ export default Vue.extend({
   .header { height: 60px; gap: 10px; padding: 0 14px; }
   .history-actions { display: none; }
   .header-search { width: auto; flex: 1; max-width: none; height: 42px; }
-  .account { display: none; }
+  .account { gap: 7px; }
+  .account-name, .account-logout span { display: none; }
+  .account-logout { width: 36px; padding: 0; justify-content: center; }
   .mobile-nav {
     position: fixed; z-index: 5; left: 0; right: 0; bottom: 0;
     height: calc(var(--console-nav-h) + env(safe-area-inset-bottom));
