@@ -53,7 +53,7 @@
         @loop="setLoop"
         @random="setRandom"
       />
-      <ConsoleQueueDrawer :open="queueOpen" :queue="state.queue" :is-admin="isAdmin" @close="queueOpen = false" @clear="clear"/>
+      <ConsoleQueueDrawer :open="queueOpen" :queue="state.queue" :is-admin="isAdmin" @close="queueOpen = false" @play="playQueuedTrack" @clear="clear"/>
     </template>
   </main>
 </template>
@@ -158,6 +158,10 @@ export default Vue.extend({
     },
     play(resource: TrackResource) {
       return this.call("music/play", { resource });
+    },
+    playQueuedTrack(resource: TrackResource) {
+      this.queueOpen = false;
+      return this.play(resource);
     },
     add(resource: TrackResource) {
       return this.call("music/add", { resource });

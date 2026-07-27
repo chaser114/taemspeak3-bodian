@@ -27,7 +27,9 @@
 
     <div class="controls" aria-label="播放控制">
       <button type="button" title="上一首" aria-label="上一首" :disabled="!canControl" @click="$emit('previous')">⏮</button>
-      <button type="button" class="play-button" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')">{{ showPlayIcon ? '▶' : 'Ⅱ' }}</button>
+      <button type="button" class="play-button" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')">
+        <b-icon :icon="showPlayIcon ? 'play' : 'pause'" size="is-medium" />
+      </button>
       <button type="button" title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')">⏭</button>
     </div>
 
@@ -285,7 +287,8 @@ button { border: 0; background: transparent; cursor: pointer; }
 .track-copy small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
 .controls { display: flex; align-items: center; gap: 8px; }
 .controls button {
-  width: 38px; height: 38px; border-radius: 50%; color: #476170; font-size: 17px;
+  width: 38px; height: 38px; display: grid; place-items: center; padding: 0;
+  border-radius: 50%; color: #476170; font-size: 17px; line-height: 1;
 }
 @media (hover: hover) and (pointer: fine) {
   .controls button:hover:not(:disabled) { background: var(--console-brand-soft); color: var(--console-brand-dark); }
@@ -344,6 +347,7 @@ button { border: 0; background: transparent; cursor: pointer; }
 }
 .lyrics-scroll {
   height: 100%; overflow: auto; padding: 26vh 20px; scroll-behavior: smooth;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 .lyrics-line {
@@ -356,7 +360,9 @@ button { border: 0; background: transparent; cursor: pointer; }
 .expanded .mode-volume { justify-content: center; }
 .expanded .volume input[type="range"] { width: 140px; }
 .back-button {
-  position: absolute; top: 20px; left: 24px; color: var(--console-brand-dark); font-size: 15px; font-weight: 600;
+  position: absolute; z-index: 2; top: 20px; left: 24px; min-height: 44px; padding: 8px 10px;
+  display: inline-flex; align-items: center; gap: 4px; border-radius: var(--console-radius-sm);
+  color: var(--console-brand-dark); font-size: 15px; font-weight: 600;
 }
 .back-button:hover { color: #185d55; }
 
@@ -395,9 +401,11 @@ button { border: 0; background: transparent; cursor: pointer; }
 
   .player-bar.expanded {
     left: 0;
-    bottom: calc(var(--console-nav-h) + env(safe-area-inset-bottom));
-    height: calc(100vh - var(--console-nav-h) - env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; gap: 10px; padding: 44px 16px 16px;
+    bottom: 0;
+    height: 100vh;
+    height: 100dvh;
+    display: flex; flex-direction: column; gap: 10px;
+    padding: calc(44px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
   }
   .expanded .timeline {
     position: static; display: flex; width: 100%; max-width: 430px; height: auto; pointer-events: auto;
@@ -412,7 +420,7 @@ button { border: 0; background: transparent; cursor: pointer; }
   .lyrics-scroll { padding: 22vh 12px; }
   .lyrics-line { font-size: 15px; }
   .lyrics-line.active { font-size: 18px; }
-  .back-button { top: 14px; left: 14px; }
+  .back-button { top: env(safe-area-inset-top); left: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
