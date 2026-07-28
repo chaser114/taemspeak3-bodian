@@ -7,6 +7,7 @@ import App from "./App.vue";
 import Home from "./Pages/Home.vue";
 import ConsoleOverview from "./Pages/ConsoleOverview.vue";
 import ConsoleAdmin from "./Pages/ConsoleAdmin.vue";
+import BotSettings from "./Pages/BotSettings.vue";
 
 Vue.use(VueRouter);
 Vue.use(Buefy);
@@ -18,6 +19,7 @@ const router = new VueRouter({
 		{ path: "/music", component: ConsoleOverview },
 		{ path: "/recent", component: ConsoleOverview, props: { recentOnly: true } },
 		{ path: "/admin", component: ConsoleAdmin },
+		{ path: "/settings/:name", component: BotSettings, props: { online: false } },
 		{ path: "*", redirect: "/" },
 	]
 });

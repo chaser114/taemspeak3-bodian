@@ -25,14 +25,12 @@ namespace TS3AudioBot.Web
 		private static readonly HttpClient Http = CreateHttpClient();
 		private static int busy;
 
-		// Public release channels. The Bodian source is the default. Release files are
-		// built by GitHub Actions and uploaded to the public download directory manually.
+		// Public release channels. Keep the legacy "bodian" source id for existing
+		// web clients, but resolve it from the GitCode mirror Release API.
 		private const string GithubOwner = "chaser114";
 		private const string GithubRepo = "taemspeak3-bodian";
-		private const string BodianBaseUrl = "https://teamspeak3.358817.xyz";
-		private const string BodianVersionUrl = BodianBaseUrl + "/VERSION.txt";
-		private const string BodianLinuxAssetUrl = BodianBaseUrl + "/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz";
-		private const string BodianWindowsAssetUrl = BodianBaseUrl + "/TS3AudioBot-KuwoPlugin-windows-x64.zip";
+		private const string GitcodeOwner = "chaser114";
+		private const string GitcodeRepo = "taemspeak3-bodian";
 
 		public string InstallRoot { get; }
 		public string CurrentVersion { get; }
@@ -52,7 +50,7 @@ namespace TS3AudioBot.Web
 				busy = Volatile.Read(ref busy) != 0,
 				sources = new object[]
 				{
-					new { id = "bodian", label = "波点下载源", defaultSource = true },
+					new { id = "bodian", label = "GitHub 镜像源", defaultSource = true },
 					new { id = "github", label = "GitHub 官方源", defaultSource = false },
 				}
 			};
@@ -68,7 +66,7 @@ namespace TS3AudioBot.Web
 			var githubTask = FetchLatestAsync("github", platform);
 
 			try { bodian = await bodianTask; }
-			catch (Exception ex) { errors.Add("波点下载源: " + ex.Message); Log.Warn(ex, "Bodian update check failed."); }
+			catch (Exception ex) { errors.Add("GitHub 镜像源: " + ex.Message); Log.Warn(ex, "GitCode mirror update check failed."); }
 
 			try { github = await githubTask; }
 			catch (Exception ex) { errors.Add("GitHub: " + ex.Message); Log.Warn(ex, "GitHub update check failed."); }
@@ -94,7 +92,7 @@ namespace TS3AudioBot.Web
 					new
 					{
 						id = "bodian",
-						label = "波点下载源",
+						label = "GitHub 镜像源",
 						available = bodian != null,
 						latestVersion = bodian?.Tag,
 						hasUpdate = bodian != null && IsNewer(bodian.Tag, CurrentVersion),
@@ -182,10 +180,9 @@ namespace TS3AudioBot.Web
 
 		private static async Task<ReleaseInfo> FetchLatestAsync(string source, string platform)
 		{
-			if (source == "bodian")
-				return await FetchBodianLatestAsync(platform);
-
-			var apiUrl = $"https://api.github.com/repos/{GithubOwner}/{GithubRepo}/releases/latest";
+			var apiUrl = source == "bodian"
+				? $"https://gitcode.com/api/v5/repos/{GitcodeOwner}/{GitcodeRepo}/releases/latest"
+				: $"https://api.github.com/repos/{GithubOwner}/{GithubRepo}/releases/latest";
 
 			using var req = new HttpRequestMessage(HttpMethod.Get, apiUrl);
 			req.Headers.TryAddWithoutValidation("Accept", "application/json");
@@ -215,34 +212,6 @@ namespace TS3AudioBot.Web
 				PublishedAt = published,
 				AssetName = asset.Value.name,
 				AssetUrl = asset.Value.url,
-			};
-		}
-
-		private static async Task<ReleaseInfo> FetchBodianLatestAsync(string platform)
-		{
-			using var req = new HttpRequestMessage(HttpMethod.Get, BodianVersionUrl);
-			req.Headers.TryAddWithoutValidation("Accept", "text/plain");
-			req.Headers.TryAddWithoutValidation("User-Agent", "taemspeak3-bodian-updater");
-
-			using var resp = await Http.SendAsync(req);
-			var body = await resp.Content.ReadAsStringAsync();
-			if (!resp.IsSuccessStatusCode)
-				throw new InvalidOperationException($"无法获取波点下载源版本号（HTTP {(int)resp.StatusCode}）。");
-
-			var tag = body
-				.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-				.Select(line => line.Trim())
-				.FirstOrDefault();
-			if (string.IsNullOrWhiteSpace(tag) || tag.Any(char.IsWhiteSpace) || tag.IndexOfAny(new[] { '<', '>', '\0' }) >= 0)
-				throw new InvalidOperationException("波点下载源 VERSION.txt 返回了无效版本号。");
-
-			var windows = platform == "windows";
-			return new ReleaseInfo
-			{
-				Tag = tag,
-				Notes = string.Empty,
-				AssetName = windows ? "TS3AudioBot-KuwoPlugin-windows-x64.zip" : "TS3AudioBot-KuwoPlugin-linux-x64.tar.gz",
-				AssetUrl = windows ? BodianWindowsAssetUrl : BodianLinuxAssetUrl,
 			};
 		}
 

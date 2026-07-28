@@ -47,6 +47,7 @@
         <article v-for="bot in bots" :key="bot.id">
           <div class="bot-info"><b>{{ bot.name }}</b><small>{{ bot.address }}</small></div>
           <span :class="['status', bot.status]">{{ statusText(bot.status) }}</span>
+          <button class="text-button" @click="openSettings(bot)">机器人设置</button>
           <button class="text-button" @click="openEdit(bot)">编辑</button>
           <button class="text-button delete" @click="remove(bot)">删除</button>
         </article>
@@ -304,6 +305,9 @@ export default Vue.extend({
       this.editAddress = bot.address;
       this.editNickname = bot.name;
       this.editPassword = "";
+    },
+    openSettings(bot: Bot) {
+      this.$router.push({ path: "/settings/" + encodeURIComponent(bot.id) });
     },
     closeEdit() { this.editing = null; this.editPassword = ""; },
     saveEdit() {

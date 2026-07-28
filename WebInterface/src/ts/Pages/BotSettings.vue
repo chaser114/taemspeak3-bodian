@@ -107,11 +107,11 @@
 			</settings-field>
 		</settings-group>
 
-		<settings-group label="Voice control">
-			<settings-field :filter="filter" path="voice.enabled" label="Enable complete voice control">
+		<settings-group label="语音控制">
+			<settings-field :filter="filter" path="voice.enabled" label="启用语音控制">
 				<b-switch v-model="model.voice.enabled" size="is-medium"></b-switch>
 			</settings-field>
-			<settings-field :filter="filter" path="voice.wake_word" label="Wake word">
+			<settings-field :filter="filter" path="voice.wake_word" label="唤醒词">
 				<b-input v-model="model.voice.wake_word" minlength="2" maxlength="20" expanded required></b-input>
 			</settings-field>
 		</settings-group>

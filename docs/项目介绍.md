@@ -136,14 +136,14 @@ start-web-console.bat
 
 | 选项 | 说明 |
 |------|------|
-| **波点下载源** | 手动同步到国内公开下载目录的文件 |
+| **GitHub 镜像源** | GitCode 仓库的 Releases 安装包 |
 | **GitHub 官方源** | 直连 GitHub Releases |
 
-构建与发版由 **GitHub Actions → GitHub Releases** 完成；GitHub Actions 不再自动请求 WebDAV 或 EdgeOne。
+构建与发版由 **GitHub Actions → GitHub Releases** 完成；发布后手动把同一构建的安装包上传到 GitCode Release。GitHub Actions 不再自动请求 WebDAV 或 EdgeOne。
 
-#### 手动同步波点下载源
+#### 手动同步 GitHub 镜像源
 
-从同一次 GitHub Release 或 Actions Artifacts 下载以下三个文件：
+从同一次 GitHub Release 或 Actions Artifacts 下载以下三个文件，并上传到 GitCode 仓库 `chaser114/taemspeak3-bodian` 的同名 Release：
 
 ```text
 TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
@@ -151,7 +151,7 @@ TS3AudioBot-KuwoPlugin-windows-x64.zip
 VERSION.txt
 ```
 
-上传到国内公开下载目录时，请按这个顺序操作：
+上传到 GitCode Release 时，请按这个顺序操作：
 
 1. 先上传 Linux 和 Windows 压缩包并确认上传完成；
 2. 最后上传 `VERSION.txt`，避免机器人先发现新版本却下载不到完整压缩包；
