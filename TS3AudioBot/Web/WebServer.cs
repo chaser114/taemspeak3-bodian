@@ -372,6 +372,26 @@ namespace TS3AudioBot.Web
 				});
 				await WriteJson(ctx, new { bots }); return;
 			}
+			if (path == "bots/voice" && ctx.Request.Method == "GET")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可以查看语音设置。", StatusCodes.Status403Forbidden); return; }
+				try { await WriteJson(ctx, console.GetVoiceSettings(ctx.Request.Query["botId"].ToString())); }
+				catch (Exception ex) { await WriteError(ctx, ex.Message, StatusCodes.Status422UnprocessableEntity); }
+				return;
+			}
+			if (path == "bots/voice" && ctx.Request.Method == "POST")
+			{
+				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可以修改语音设置。", StatusCodes.Status403Forbidden); return; }
+				try
+				{
+					var body = await ReadJson(ctx);
+					var enabled = body.Value<bool?>("enabled") ?? false;
+					await WriteJson(ctx, console.SetVoiceSettings(body.Value<string>("id"), enabled, body.Value<string>("wakeWord")));
+				}
+				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
+				catch (Exception ex) { await WriteError(ctx, ex.Message, StatusCodes.Status422UnprocessableEntity); }
+				return;
+			}
 			if (path == "bots/description-permission")
 			{
 				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可查看该提示。", StatusCodes.Status403Forbidden); return; }

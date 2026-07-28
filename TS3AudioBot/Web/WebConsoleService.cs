@@ -118,6 +118,33 @@ namespace TS3AudioBot.Web
 				return Task.CompletedTask;
 			});
 
+		public object GetVoiceSettings(string? botId = null)
+		{
+			var config = RequireBotConfig(botId);
+			return new
+			{
+				id = config.Name,
+				enabled = config.Voice.Enabled.Value,
+				wakeWord = config.Voice.WakeWord.Value,
+			};
+		}
+
+		public object SetVoiceSettings(string? botId, bool enabled, string? wakeWord)
+		{
+			var config = RequireBotConfig(botId);
+			var normalizedWakeWord = wakeWord?.Trim() ?? string.Empty;
+			if (normalizedWakeWord.Length < 2 || normalizedWakeWord.Length > 20)
+				throw new ArgumentException("唤醒词长度必须是 2 到 20 个字符。", nameof(wakeWord));
+
+			config.Voice.WakeWord.Value = normalizedWakeWord;
+			config.Voice.Enabled.Value = enabled;
+			var saved = config.SaveWhenExists();
+			if (!saved.Ok)
+				throw new InvalidOperationException(saved.Error.Str);
+
+			return GetVoiceSettings(config.Name);
+		}
+
 		public async Task<object> GetLyrics(string? botId = null)
 		{
 			var bot = GetBot(botId);
@@ -319,6 +346,20 @@ namespace TS3AudioBot.Web
 		}
 
 		private Bot RequireBot(string? botId) => GetBot(botId) ?? throw new InvalidOperationException("还没有可用的机器人，请先由管理员完成 TeamSpeak 连接配置。");
+		private ConfBot RequireBotConfig(string? botId)
+		{
+			var id = botId?.Trim();
+			if (string.IsNullOrWhiteSpace(id))
+				id = rootConfig.GetAllBots()?.FirstOrDefault()?.Name;
+			if (string.IsNullOrWhiteSpace(id))
+				throw new InvalidOperationException("还没有可配置的机器人。");
+
+			var result = rootConfig.GetBotConfig(id);
+			if (!result.Ok)
+				throw new InvalidOperationException(result.Error.Message);
+			return result.Value;
+		}
+
 		private Bot? GetBot(string? botId)
 		{
 			var infos = botManager.GetBotInfolist();

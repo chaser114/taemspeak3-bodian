@@ -47,7 +47,6 @@
         <article v-for="bot in bots" :key="bot.id">
           <div class="bot-info"><b>{{ bot.name }}</b><small>{{ bot.address }}</small></div>
           <span :class="['status', bot.status]">{{ statusText(bot.status) }}</span>
-          <button class="text-button" @click="openSettings(bot)">机器人设置</button>
           <button class="text-button" @click="openEdit(bot)">编辑</button>
           <button class="text-button delete" @click="remove(bot)">删除</button>
         </article>
@@ -62,6 +61,32 @@
           <label>服务器密码（可选）<input v-model="newPassword" type="password"></label>
           <button>创建并连接</button>
         </form>
+      </section>
+
+      <section class="voice-card">
+        <div class="section-heading"><h2>语音控制</h2><span v-if="voiceLoading">读取中…</span></div>
+        <p>只有说出唤醒词后，机器人才会识别语音指令。</p>
+        <p v-if="!bots.length" class="empty">请先创建机器人。</p>
+        <template v-else>
+          <label>控制机器人
+            <select v-model="voiceBotId" :disabled="voiceLoading || voiceSaving" @change="loadVoiceSettings">
+              <option v-for="bot in bots" :key="bot.id" :value="bot.id">{{ bot.name }}</option>
+            </select>
+          </label>
+          <label class="checkbox-row">
+            <input v-model="voiceEnabled" type="checkbox" :disabled="voiceLoading || voiceSaving">
+            <span>启用语音控制</span>
+          </label>
+          <label>唤醒词
+            <input v-model.trim="voiceWakeWord" minlength="2" maxlength="20" placeholder="例如：音乐机器人">
+          </label>
+          <p class="voice-hint">例如：说“音乐机器人，暂停”“音乐机器人，继续”或“音乐机器人，下一首”。</p>
+          <p v-if="voiceError" class="inline-error">{{ voiceError }}</p>
+          <p v-if="voiceMessage" class="inline-success">{{ voiceMessage }}</p>
+          <button type="button" :disabled="voiceLoading || voiceSaving" @click="saveVoiceSettings">
+            {{ voiceSaving ? '保存中…' : '保存语音设置' }}
+          </button>
+        </template>
       </section>
 
       <section class="accounts-card">
@@ -192,6 +217,8 @@ export default Vue.extend({
       updateOpen: false, currentVersion: "", latestVersion: "", hasUpdate: false,
       servicePid: 0 as number | string, serviceBusy: false, serviceMessage: "",
       serviceConfirm: null as null | { action: "restart" | "stop"; password: string; error: string },
+      voiceBotId: "", voiceEnabled: false, voiceWakeWord: "音乐机器人",
+      voiceLoading: false, voiceSaving: false, voiceError: "", voiceMessage: "",
       logText: "", logTimer: 0 as any,
     };
   },
@@ -207,6 +234,7 @@ export default Vue.extend({
     this.brandName = user.brandName;
     this.meUsername = user.username;
     await this.reload();
+    await this.loadVoiceSettings();
     await this.refreshUpdate();
     await this.refreshService();
     await this.refreshLogs();
@@ -219,6 +247,56 @@ export default Vue.extend({
     async reload() {
       this.bots = (await consoleApi<{ bots: Bot[] }>("bots")).bots;
       this.accounts = (await consoleApi<{ accounts: Account[] }>("accounts")).accounts;
+    },
+    async loadVoiceSettings() {
+      this.voiceError = "";
+      this.voiceMessage = "";
+      if (!this.bots.length) {
+        this.voiceBotId = "";
+        this.voiceEnabled = false;
+        this.voiceWakeWord = "音乐机器人";
+        return;
+      }
+      if (!this.voiceBotId || !this.bots.some(bot => bot.id === this.voiceBotId))
+        this.voiceBotId = this.bots[0].id;
+
+      this.voiceLoading = true;
+      this.voiceEnabled = false;
+      this.voiceWakeWord = "音乐机器人";
+      try {
+        const settings = await consoleApi<{ enabled?: boolean; wakeWord?: string }>("bots/voice?botId=" + encodeURIComponent(this.voiceBotId));
+        this.voiceEnabled = !!settings.enabled;
+        this.voiceWakeWord = settings.wakeWord || "音乐机器人";
+      } catch (error) {
+        this.voiceError = error instanceof Error ? error.message : "读取语音设置失败。";
+      } finally {
+        this.voiceLoading = false;
+      }
+    },
+    async saveVoiceSettings() {
+      if (!this.voiceBotId || this.voiceLoading || this.voiceSaving) return;
+      const wakeWord = (this.voiceWakeWord || "").trim();
+      this.voiceError = "";
+      this.voiceMessage = "";
+      if (wakeWord.length < 2 || wakeWord.length > 20) {
+        this.voiceError = "唤醒词长度必须是 2 到 20 个字符。";
+        return;
+      }
+      this.voiceSaving = true;
+      try {
+        const settings = await consoleApi<{ enabled?: boolean; wakeWord?: string }>("bots/voice", {
+          id: this.voiceBotId,
+          enabled: this.voiceEnabled,
+          wakeWord,
+        });
+        this.voiceEnabled = !!settings.enabled;
+        this.voiceWakeWord = settings.wakeWord || wakeWord;
+        this.voiceMessage = "语音设置已保存。";
+      } catch (error) {
+        this.voiceError = error instanceof Error ? error.message : "保存语音设置失败。";
+      } finally {
+        this.voiceSaving = false;
+      }
     },
     async refreshUpdate() {
       try {
@@ -298,6 +376,7 @@ export default Vue.extend({
         await consoleApi("setup/bot", { address: this.newAddress, nickname: this.newNickname, serverPassword: this.newPassword });
         this.newAddress = ""; this.newNickname = "波点音乐"; this.newPassword = "";
         await this.reload();
+        await this.loadVoiceSettings();
       });
     },
     openEdit(bot: Bot) {
@@ -306,9 +385,6 @@ export default Vue.extend({
       this.editNickname = bot.name;
       this.editPassword = "";
     },
-    openSettings(bot: Bot) {
-      this.$router.push({ path: "/settings/" + encodeURIComponent(bot.id) });
-    },
     closeEdit() { this.editing = null; this.editPassword = ""; },
     saveEdit() {
       if (!this.editing) return;
@@ -316,9 +392,10 @@ export default Vue.extend({
         await consoleApi("setup/bot", { id: this.editing!.id, address: this.editAddress, nickname: this.editNickname, serverPassword: this.editPassword });
         this.closeEdit();
         await this.reload();
+        await this.loadVoiceSettings();
       });
     },
-    remove(bot: Bot) { return this.run(async () => { await consoleApi("bots/delete", { id: bot.id }); await this.reload(); }); },
+    remove(bot: Bot) { return this.run(async () => { await consoleApi("bots/delete", { id: bot.id }); await this.reload(); await this.loadVoiceSettings(); }); },
     async createAccount() {
       this.accountError = "";
       this.accountSuccess = "";
@@ -454,11 +531,14 @@ export default Vue.extend({
 .brand-card { grid-column: 1; grid-row: 1; }
 .new-bot-card { grid-column: 1; grid-row: 2; }
 .bots-card { grid-column: 2; grid-row: 1 / span 2; }
-.accounts-card { grid-column: 1 / span 2; grid-row: 3; }
+.voice-card { grid-column: 1; grid-row: 3; }
+.accounts-card { grid-column: 1 / span 2; grid-row: 4; }
 .section-heading, .modal-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .section-heading h2, .grid h2, .edit-modal h2 { margin: 0; font-size: 17px; }
 .section-heading span { color: var(--console-muted); font-size: 13px; }
 .new-bot-card > p, .edit-modal > p, .empty { color: var(--console-muted); font-size: 13px; line-height: 1.55; }
+.voice-card > p { color: var(--console-muted); font-size: 13px; line-height: 1.55; }
+.voice-hint { margin: 12px 0 0; }
 label { display: block; margin-top: 12px; color: #44515e; font-size: 13px; font-weight: 600; }
 input, select {
   width: 100%; height: 44px; margin-top: 6px; padding: 0 12px; border: 1px solid #d5e0e3;
@@ -467,6 +547,9 @@ input, select {
 input:focus, select:focus {
   outline: 0; border-color: var(--console-brand); box-shadow: 0 0 0 3px rgba(79, 184, 168, 0.14);
 }
+.checkbox-row { display: flex; align-items: center; gap: 8px; }
+.checkbox-row input { width: 18px; height: 18px; margin: 0; accent-color: var(--console-brand); }
+.voice-card > button { margin-top: 16px; }
 form > button { margin-top: 16px; }
 button {
   height: 42px; padding: 0 14px; border: 0; border-radius: var(--console-radius-sm);
@@ -516,7 +599,7 @@ article small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
 
 @media (max-width: 1000px) {
   .grid { grid-template-columns: 1fr; grid-template-rows: none; }
-  .brand-card, .new-bot-card, .bots-card, .accounts-card { grid-column: auto; grid-row: auto; }
+  .brand-card, .new-bot-card, .bots-card, .voice-card, .accounts-card { grid-column: auto; grid-row: auto; }
   .create-account { grid-template-columns: 1fr; }
   .create-account button { width: 100%; }
   .admin { padding: 24px 16px 40px; }

@@ -95,7 +95,6 @@ export default Vue.component("server-tree-user", {
 			if (!Util.check(this, res, "Failed to change mode")) return;
 			this.meta.refresh();
 		},
-		// Duplicated method! (BotSettings) combine somehere maybe
 		async botRename(name: string) {
 			const res = await bot(
 				cmd<void>("bot", "name", name),
