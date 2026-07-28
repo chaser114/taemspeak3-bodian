@@ -34,7 +34,6 @@ namespace TS3AudioBot.Audio
 		private const int QueueCapacity = 256;
 		private const int SampleRate = 16_000;
 		private const int DecoderBufferSize = 8192;
-		private const int SpeechPeakThreshold = 280;
 
 		private readonly ConfVoice config;
 		private readonly TsFullClient client;
@@ -256,12 +255,6 @@ namespace TS3AudioBot.Audio
 
 			speaker.LastSeenUtc = DateTime.UtcNow;
 			var pcm = decoded.ToArray();
-			if (!HasSpeech(pcm))
-			{
-				HandleSegmentEnd(frame.Sender, speaker);
-				return;
-			}
-
 			if (!speaker.CommandMode)
 			{
 				speaker.AcceptWake();
@@ -371,17 +364,6 @@ namespace TS3AudioBot.Audio
 			if (client.Book.Clients.TryGetValue(sender, out var clientInfo) && clientInfo.Uid.HasValue)
 				return clientInfo.Uid.Value;
 			return Uid.Anonymous;
-		}
-
-		private static bool HasSpeech(byte[] pcm)
-		{
-			for (int i = 0; i + 1 < pcm.Length; i += 2)
-			{
-				var sample = Math.Abs(BitConverter.ToInt16(pcm, i));
-				if (sample >= SpeechPeakThreshold)
-					return true;
-			}
-			return false;
 		}
 
 		private static string ExtractText(string json, string property)
