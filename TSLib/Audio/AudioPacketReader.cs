@@ -22,9 +22,9 @@ namespace TSLib.Audio
 			if (OutStream is null || meta is null)
 				return;
 
-			// End of stream is signalled with no data or a single byte.
-			// The header has 5 bytes; a six-byte packet is the one-byte end marker.
-			if (data.Length <= 6)
+			// The header has 5 bytes. A short packet carries no Opus payload and
+			// marks the end of the current voice segment.
+			if (data.Length < 5)
 				return;
 
 			// Skip [0,2) Voice Packet Id for now
@@ -32,7 +32,15 @@ namespace TSLib.Audio
 			// TODO add defragment start
 			meta.In.Sender = (ClientId)BinaryPrimitives.ReadUInt16BigEndian(data.Slice(2, 2));
 			meta.Codec = (Codec)data[4];
-			OutStream?.Write(data.Slice(5), meta);
+			if (data.Length <= 6)
+			{
+				meta.Control = PipeControl.EmptyTick;
+				OutStream.Write(Span<byte>.Empty, meta);
+				return;
+			}
+
+			meta.Control = PipeControl.Data;
+			OutStream.Write(data.Slice(5), meta);
 		}
 	}
 }

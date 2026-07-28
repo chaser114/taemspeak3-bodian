@@ -16,7 +16,7 @@ namespace TSLib.Audio
 		public Codec? Codec { get; set; }
 		public MetaIn In;
 		public MetaOut? Out { get; set; }
-		//public PipeControl Control { get; set; }
+		public PipeControl Control { get; set; } = PipeControl.Data;
 	}
 
 	public struct MetaIn

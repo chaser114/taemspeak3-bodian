@@ -71,14 +71,15 @@ namespace TS3AudioBot.Audio
 
 		public void Write(Span<byte> data, Meta? meta)
 		{
-			if (!running || data.IsEmpty || meta?.Codec != Codec.OpusVoice)
+			if (!running || meta?.Codec != Codec.OpusVoice
+				|| (data.IsEmpty && meta.Control != PipeControl.EmptyTick))
 				return;
 
 			var currentQueue = queue;
 			if (currentQueue is null)
 				return;
 
-			var frame = new VoiceFrame(meta.In.Sender, meta.Codec.Value, data.ToArray());
+			var frame = new VoiceFrame(meta.In.Sender, meta.Codec.Value, meta.Control, data.ToArray());
 			try
 			{
 				// Never let recognition back-pressure TeamSpeak's packet receiver.
@@ -233,6 +234,13 @@ namespace TS3AudioBot.Audio
 				speaker.UpdateWakeWord(wakeWord, SampleRate);
 			}
 
+			if (frame.Control == PipeControl.EmptyTick)
+			{
+				speaker.LastSeenUtc = DateTime.UtcNow;
+				HandleSegmentEnd(frame.Sender, speaker);
+				return;
+			}
+
 			Span<byte> decoded;
 			try
 			{
@@ -250,12 +258,7 @@ namespace TS3AudioBot.Audio
 			var pcm = decoded.ToArray();
 			if (!HasSpeech(pcm))
 			{
-				if (!speaker.CommandMode)
-				{
-					var finalWake = ExtractText(speaker.FlushWake(), "text");
-					if (ContainsWakeWord(finalWake, speaker.WakeWord))
-						speaker.BeginCommand();
-				}
+				HandleSegmentEnd(frame.Sender, speaker);
 				return;
 			}
 
@@ -267,13 +270,30 @@ namespace TS3AudioBot.Audio
 				if (ContainsWakeWord(partial, speaker.WakeWord))
 				{
 					speaker.BeginCommand();
-					speaker.CommandRecognizer!.AcceptWaveform(pcm, pcm.Length);
+					// Keep this audio in the command recognizer so commands spoken
+					// without a pause still work, but do not count the wake phrase
+					// itself as command audio.
+					speaker.AcceptCommand(pcm, false);
 				}
 			}
 			else
 			{
-				speaker.CommandRecognizer!.AcceptWaveform(pcm, pcm.Length);
+				speaker.AcceptCommand(pcm, true);
 			}
+		}
+
+		private void HandleSegmentEnd(ClientId sender, SpeakerState speaker)
+		{
+			if (!speaker.CommandMode)
+			{
+				var finalWake = ExtractText(speaker.FlushWake(), "text");
+				if (ContainsWakeWord(finalWake, speaker.WakeWord))
+					speaker.BeginCommand();
+				return;
+			}
+
+			if (speaker.CommandHasAudio)
+				FinishCommand(sender, speaker);
 		}
 
 		private void ExpireCommandWindows(Dictionary<ClientId, SpeakerState> speakers)
@@ -295,6 +315,12 @@ namespace TS3AudioBot.Audio
 
 		private void FinishCommand(ClientId sender, SpeakerState speaker)
 		{
+			if (!speaker.CommandHasAudio)
+			{
+				speaker.ResetCommand();
+				return;
+			}
+
 			var text = ExtractText(speaker.CommandRecognizer!.FinalResult(), "text");
 			var wake = speaker.WakeWord;
 			speaker.ResetCommand();
@@ -389,12 +415,14 @@ namespace TS3AudioBot.Audio
 		{
 			public ClientId Sender { get; }
 			public Codec Codec { get; }
+			public PipeControl Control { get; }
 			public byte[] Data { get; }
 
-			public VoiceFrame(ClientId sender, Codec codec, byte[] data)
+			public VoiceFrame(ClientId sender, Codec codec, PipeControl control, byte[] data)
 			{
 				Sender = sender;
 				Codec = codec;
+				Control = control;
 				Data = data;
 			}
 		}
@@ -411,6 +439,7 @@ namespace TS3AudioBot.Audio
 			public DateTime CommandDeadlineUtc { get; private set; }
 			public DateTime LastSeenUtc { get; set; } = DateTime.UtcNow;
 			private bool wakeHasAudio;
+			public bool CommandHasAudio { get; private set; }
 
 			public SpeakerState(Model model, string wakeWord, int sampleRate)
 			{
@@ -464,6 +493,13 @@ namespace TS3AudioBot.Audio
 				CommandDeadlineUtc = DateTime.UtcNow + CommandWindow;
 			}
 
+			public void AcceptCommand(byte[] pcm, bool countAsCommandAudio)
+			{
+				CommandRecognizer!.AcceptWaveform(pcm, pcm.Length);
+				if (countAsCommandAudio)
+					CommandHasAudio = true;
+			}
+
 			private Model GetModel()
 			{
 				return model;
@@ -473,6 +509,7 @@ namespace TS3AudioBot.Audio
 			{
 				CommandRecognizer?.Dispose();
 				CommandRecognizer = null;
+				CommandHasAudio = false;
 				WakeRecognizer.Reset();
 				wakeHasAudio = false;
 			}
