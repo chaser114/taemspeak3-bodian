@@ -451,8 +451,11 @@ namespace TS3AudioBot.Audio
 
 			private VoskRecognizer CreateWakeRecognizer(int sampleRate)
 			{
-				var grammar = new JArray(WakeWord).ToString(Newtonsoft.Json.Formatting.None);
-				var recognizer = new VoskRecognizer(model, sampleRate, grammar);
+				// Do not pass the custom wake word as a single Vosk grammar token.
+				// Chinese phrases and user-defined names are often not literal entries
+				// in the model vocabulary; Vosk would discard them before recognition.
+				// The recognized text is filtered by ContainsWakeWord instead.
+				var recognizer = new VoskRecognizer(model, sampleRate);
 				recognizer.SetMaxAlternatives(0);
 				return recognizer;
 			}
