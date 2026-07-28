@@ -31,6 +31,15 @@
 - 管理员：程序更新、服务日志、重启 / 停止服务（密码弹窗确认）  
 - 桌面 + 手机自适应布局  
 
+### 本地语音控制（可选）
+
+- 在机器人设置中打开「语音控制」后，机器人在本机使用 Vosk 识别 TeamSpeak 语音。
+- 功能默认关闭；唤醒词默认为「音乐机器人」，可在后台改成 2～20 个字符，且与机器人昵称相互独立。
+- 每条语音指令都必须先说唤醒词，例如「音乐机器人，暂停」「音乐机器人，继续」「音乐机器人，下一首」「音乐机器人，播放稻香」。
+- 支持暂停、继续、下一首，以及带歌名的播放 / 点歌指令。
+- Windows / Linux 发布包已经包含 Vosk 运行库和中文模型，不需要把语音上传到云端，也不会持久保存原始语音。
+- 语音识别会占用额外 CPU；一核服务器建议先观察播放是否出现卡顿，异常时关闭该开关即可。
+
 首次打开网页：
 
 1. 创建管理员账号  
@@ -44,7 +53,8 @@
 - Windows：`TS3AudioBot-KuwoPlugin-windows-x64.zip`
 - Linux：`TS3AudioBot-KuwoPlugin-linux-x64.tar.gz`
 
-推送到 `main` 后由 **GitHub Actions** 自动构建并发布。也可在对应 Actions 任务的 Artifacts 中下载测试包。
+推送到 `main` 后由 **GitHub Actions** 自动构建并创建 GitHub Release。也可在对应 Actions 任务的 Artifacts 中下载测试包。
+每次发布会同时生成 `VERSION.txt`，方便手动同步到国内下载源。
 
 ## 快速部署
 
@@ -126,11 +136,26 @@ start-web-console.bat
 
 | 选项 | 说明 |
 |------|------|
-| **EdgeOne 加速（推荐）** | 原波点下载源，仅修改显示名称 |
+| **波点下载源** | 手动同步到国内公开下载目录的文件 |
 | **GitHub 官方源** | 直连 GitHub Releases |
 
-构建与发版只依赖 **GitHub Actions → GitHub Releases**。  
-**不需要**再把安装包手动传到 Gitee / GitCode。GitCode 如有仓库，仅作源码镜像即可。
+构建与发版由 **GitHub Actions → GitHub Releases** 完成；GitHub Actions 不再自动请求 WebDAV 或 EdgeOne。
+
+#### 手动同步波点下载源
+
+从同一次 GitHub Release 或 Actions Artifacts 下载以下三个文件：
+
+```text
+TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
+TS3AudioBot-KuwoPlugin-windows-x64.zip
+VERSION.txt
+```
+
+上传到国内公开下载目录时，请按这个顺序操作：
+
+1. 先上传 Linux 和 Windows 压缩包并确认上传完成；
+2. 最后上传 `VERSION.txt`，避免机器人先发现新版本却下载不到完整压缩包；
+3. 保持文件名不变，并让 `VERSION.txt` 与两个压缩包来自同一次构建。
 
 运维（管理页 → 服务与日志）：
 
@@ -200,7 +225,9 @@ private const string ApiUrl = "https://api.xcvts.cn/api/music/bdyy";
 - 构建网页、机器人、酷我插件  
 - 生成 Windows / Linux 发布包  
 - 上传 Artifact  
+- 生成 `VERSION.txt`
 - 创建 GitHub Release（`build-N`）  
+- 不自动上传到 WebDAV / EdgeOne；国内下载源由维护者手动同步
 
 ## 许可证与声明
 

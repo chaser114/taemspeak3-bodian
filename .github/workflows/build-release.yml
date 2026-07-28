@@ -133,6 +133,10 @@ jobs:
               --notes 'Pinned mirror of vosk-model-small-cn-0.22. The package workflow validates conf/model.conf before publishing this asset.'
           fi
 
+      - name: Prepare manual upload marker
+        run: |
+          printf 'build-%s\n' "${{ github.run_number }}" > artifacts/VERSION.txt
+
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -140,6 +144,7 @@ jobs:
           path: |
             artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
             artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip
+            artifacts/VERSION.txt
           if-no-files-found: error
 
       - name: Create GitHub Release
@@ -153,37 +158,4 @@ jobs:
           files: |
             artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
             artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip
-
-      - name: Publish release to WebDAV
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        env:
-          WEBDAV_URL: ${{ secrets.WEBDAV_URL }}
-          WEBDAV_USERNAME: ${{ secrets.WEBDAV_USERNAME }}
-          WEBDAV_PASSWORD: ${{ secrets.WEBDAV_PASSWORD }}
-        run: |
-          set -euo pipefail
-
-          test -n "$WEBDAV_URL"
-          test -n "$WEBDAV_USERNAME"
-          test -n "$WEBDAV_PASSWORD"
-
-          base_url="${WEBDAV_URL%/}"
-          version="build-${GITHUB_RUN_NUMBER}"
-
-          printf '%s\n' "$version" > artifacts/VERSION.txt
-
-          curl --fail --show-error --silent --retry 5 --retry-all-errors \
-            --user "$WEBDAV_USERNAME:$WEBDAV_PASSWORD" \
-            --upload-file artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz \
-            "$base_url/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz"
-
-          curl --fail --show-error --silent --retry 5 --retry-all-errors \
-            --user "$WEBDAV_USERNAME:$WEBDAV_PASSWORD" \
-            --upload-file artifacts/TS3AudioBot-KuwoPlugin-windows-x64.zip \
-            "$base_url/TS3AudioBot-KuwoPlugin-windows-x64.zip"
-
-          # VERSION.txt 最后上传，避免客户端提前发现版本但下载不到完整压缩包。
-          curl --fail --show-error --silent --retry 5 --retry-all-errors \
-            --user "$WEBDAV_USERNAME:$WEBDAV_PASSWORD" \
-            --upload-file artifacts/VERSION.txt \
-            "$base_url/VERSION.txt"
+            artifacts/VERSION.txt

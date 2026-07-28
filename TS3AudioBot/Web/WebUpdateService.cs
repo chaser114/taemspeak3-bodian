@@ -25,8 +25,8 @@ namespace TS3AudioBot.Web
 		private static readonly HttpClient Http = CreateHttpClient();
 		private static int busy;
 
-		// Public release channels. The Bodian mirror is the default because its files are
-		// served directly from the public download site without requiring WebDAV credentials.
+		// Public release channels. The Bodian source is the default. Release files are
+		// built by GitHub Actions and uploaded to the public download directory manually.
 		private const string GithubOwner = "chaser114";
 		private const string GithubRepo = "taemspeak3-bodian";
 		private const string BodianBaseUrl = "https://teamspeak3.358817.xyz";
@@ -52,7 +52,7 @@ namespace TS3AudioBot.Web
 				busy = Volatile.Read(ref busy) != 0,
 				sources = new object[]
 				{
-					new { id = "bodian", label = "EdgeOne 加速（推荐）", defaultSource = true },
+					new { id = "bodian", label = "波点下载源", defaultSource = true },
 					new { id = "github", label = "GitHub 官方源", defaultSource = false },
 				}
 			};
@@ -68,7 +68,7 @@ namespace TS3AudioBot.Web
 			var githubTask = FetchLatestAsync("github", platform);
 
 			try { bodian = await bodianTask; }
-			catch (Exception ex) { errors.Add("EdgeOne 加速: " + ex.Message); Log.Warn(ex, "Bodian update check failed."); }
+			catch (Exception ex) { errors.Add("波点下载源: " + ex.Message); Log.Warn(ex, "Bodian update check failed."); }
 
 			try { github = await githubTask; }
 			catch (Exception ex) { errors.Add("GitHub: " + ex.Message); Log.Warn(ex, "GitHub update check failed."); }
@@ -94,7 +94,7 @@ namespace TS3AudioBot.Web
 					new
 					{
 						id = "bodian",
-						label = "EdgeOne 加速（推荐）",
+						label = "波点下载源",
 						available = bodian != null,
 						latestVersion = bodian?.Tag,
 						hasUpdate = bodian != null && IsNewer(bodian.Tag, CurrentVersion),
@@ -227,14 +227,14 @@ namespace TS3AudioBot.Web
 			using var resp = await Http.SendAsync(req);
 			var body = await resp.Content.ReadAsStringAsync();
 			if (!resp.IsSuccessStatusCode)
-				throw new InvalidOperationException($"无法获取 EdgeOne 加速版本号（HTTP {(int)resp.StatusCode}）。");
+				throw new InvalidOperationException($"无法获取波点下载源版本号（HTTP {(int)resp.StatusCode}）。");
 
 			var tag = body
 				.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
 				.Select(line => line.Trim())
 				.FirstOrDefault();
 			if (string.IsNullOrWhiteSpace(tag) || tag.Any(char.IsWhiteSpace) || tag.IndexOfAny(new[] { '<', '>', '\0' }) >= 0)
-				throw new InvalidOperationException("EdgeOne 加速 VERSION.txt 返回了无效版本号。");
+				throw new InvalidOperationException("波点下载源 VERSION.txt 返回了无效版本号。");
 
 			var windows = platform == "windows";
 			return new ReleaseInfo
