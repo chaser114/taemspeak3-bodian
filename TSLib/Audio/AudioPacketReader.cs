@@ -23,8 +23,8 @@ namespace TSLib.Audio
 				return;
 
 			// End of stream is signalled with no data or a single byte.
-			// The header has 5 bytes, so check for 6.
-			if (data.Length < 6)
+			// The header has 5 bytes; a six-byte packet is the one-byte end marker.
+			if (data.Length <= 6)
 				return;
 
 			// Skip [0,2) Voice Packet Id for now

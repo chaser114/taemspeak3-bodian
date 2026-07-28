@@ -82,7 +82,7 @@ namespace TSLib.Audio.Opus
 			int length = NativeMethods.opus_decode(decoder, MemoryMarshal.GetReference(inputOpusData), inputOpusData.Length, out MemoryMarshal.GetReference(outputDecodedBuffer), frameSize, 0);
 
 			if (length < 0)
-				throw new Exception("Decoding failed - " + (Errors)length);
+				throw new OpusDecodeException((Errors)length);
 
 			// TODO implement forward error corrected packet
 			//else

@@ -233,7 +233,16 @@ namespace TS3AudioBot.Audio
 				speaker.UpdateWakeWord(wakeWord, SampleRate);
 			}
 
-			var decoded = speaker.Decoder.Decode(frame.Data.AsSpan(), speaker.DecodeBuffer);
+			Span<byte> decoded;
+			try
+			{
+				decoded = speaker.Decoder.Decode(frame.Data.AsSpan(), speaker.DecodeBuffer);
+			}
+			catch (OpusDecodeException ex) when (ex.Error == Errors.InvalidPacket)
+			{
+				Log.Debug("Dropped invalid Opus voice packet from client {0} (length {1}).", frame.Sender, frame.Data.Length);
+				return;
+			}
 			if (decoded.IsEmpty)
 				return;
 
