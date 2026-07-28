@@ -150,9 +150,27 @@ namespace TS3AudioBot.Config
 		public ConfConnect Connect { get; } = Create<ConfConnect>("connect");
 		public ConfReconnect Reconnect { get; } = Create<ConfReconnect>("reconnect");
 		public ConfAudio Audio { get; } = Create<ConfAudio>("audio");
+		public ConfVoice Voice { get; } = Create<ConfVoice>("voice");
 		public ConfPlaylists Playlists { get; } = Create<ConfPlaylists>("playlists");
 		public ConfHistory History { get; } = Create<ConfHistory>("history");
 		public ConfEvents Events { get; } = Create<ConfEvents>("events");
+	}
+
+	public class ConfVoice : ConfigTable
+	{
+		public ConfigValue<bool> Enabled { get; } = new ConfigValue<bool>("enabled", false,
+			"Enables the complete local voice-control feature. Voice control is disabled by default to protect low-power servers.");
+		public ConfigValue<string> WakeWord { get; } = new ConfigValue<string>("wake_word", "音乐机器人",
+			"The local wake word required before every voice command. This is independent from the bot nickname.")
+		{
+			Validator = value =>
+			{
+				var trimmed = value?.Trim() ?? string.Empty;
+				if (trimmed.Length < 2 || trimmed.Length > 20)
+					return "Voice wake word must contain between 2 and 20 characters.";
+				return R.Ok;
+			}
+		};
 	}
 
 	public class ConfCommands : ConfigTable

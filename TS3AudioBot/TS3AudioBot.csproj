@@ -49,7 +49,19 @@
     <PackageReference Include="Nett" Version="0.15.0" />
     <PackageReference Include="PlaylistsNET" Version="1.1.2" />
     <PackageReference Include="SixLabors.ImageSharp" Version="1.0.0" />
+    <PackageReference Include="Vosk" Version="0.3.38" GeneratePathProperty="true" />
     <TrimmerRootAssembly Include="System.Text.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(PkgVosk)\build\lib\win-x64\*.dll" Condition="'$(RuntimeIdentifier)' == 'win-x64' and '$([MSBuild]::IsOsPlatform(Windows))' != 'true'">
+      <Link>%(FileName)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(PkgVosk)\build\lib\linux-x64\*.so" Condition="'$(RuntimeIdentifier)' == 'linux-x64' and '$([MSBuild]::IsOsPlatform(Linux))' != 'true'">
+      <Link>%(FileName)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

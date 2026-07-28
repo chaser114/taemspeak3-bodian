@@ -107,6 +107,15 @@
 			</settings-field>
 		</settings-group>
 
+		<settings-group label="Voice control">
+			<settings-field :filter="filter" path="voice.enabled" label="Enable complete voice control">
+				<b-switch v-model="model.voice.enabled" size="is-medium"></b-switch>
+			</settings-field>
+			<settings-field :filter="filter" path="voice.wake_word" label="Wake word">
+				<b-input v-model="model.voice.wake_word" minlength="2" maxlength="20" expanded required></b-input>
+			</settings-field>
+		</settings-group>
+
 		<settings-group label="Commands">
 			<settings-field :filter="filter" label="Matcher" path="commands.matcher" expert>
 				<b-select v-model="model.commands.matcher" placeholder="Select your matcher">
@@ -201,6 +210,10 @@ export default Vue.extend({
 				audio: {
 					volume: {},
 					bitrate: 0
+				},
+				voice: {
+					enabled: false,
+					wake_word: "音乐机器人"
 				},
 				connect: {
 					server_password: {},

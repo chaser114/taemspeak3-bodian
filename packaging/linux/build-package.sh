@@ -55,6 +55,10 @@ printf '%s\n' "Building bot and plugin..."
 rm -rf "$output_dir"
 mkdir -p "$output_dir"
 "$dotnet_cmd" publish "$repo/TS3AudioBot/TS3AudioBot.csproj" -c Release -r linux-x64 -p:SkipGitVersion=true --self-contained true --no-restore -o "$output_dir"
+# Vosk's package target follows the build host OS; this package is Linux-only.
+rm -f "$output_dir/libgcc_s_seh-1.dll" "$output_dir/libstdc++-6.dll" \
+	"$output_dir/libvosk.dll" "$output_dir/libwinpthread-1.dll"
+sh "$repo/packaging/common/fetch-voice-model.sh" "$output_dir"
 
 plugin="$repo/KuwoMusicPlugin/bin/Release/net6.0/KuwoMusicPlugin.dll"
 test -s "$plugin"

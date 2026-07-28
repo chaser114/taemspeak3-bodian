@@ -73,11 +73,27 @@ jobs:
           mkdir -p artifacts
           mv artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz artifacts/TS3AudioBot-KuwoPlugin-linux-x64.tar.gz
 
+      - name: Cache validated voice model for Windows package and mirror
+        run: |
+          set -euo pipefail
+          mkdir -p .cache
+          model_dir="artifacts/linux/TS3AudioBot-KuwoPlugin-linux-x64/voice-models/vosk-model-small-cn-0.22"
+          test -f "$model_dir/conf/model.conf"
+          rm -f .cache/vosk-model-small-cn-0.22.zip
+          (cd "$(dirname "$model_dir")" && zip -qr "$GITHUB_WORKSPACE/.cache/vosk-model-small-cn-0.22.zip" "$(basename "$model_dir")")
+          unzip -tq .cache/vosk-model-small-cn-0.22.zip
+
       - name: Publish Windows package
+        env:
+          VOICE_MODEL_ARCHIVE: ${{ github.workspace }}/.cache/vosk-model-small-cn-0.22.zip
         run: |
           dotnet restore TS3AudioBot/TS3AudioBot.csproj --runtime win-x64 -p:SkipGitVersion=true
           dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj --runtime win-x64 -p:SkipGitVersion=true
           dotnet publish TS3AudioBot/TS3AudioBot.csproj --configuration Release --runtime win-x64 --self-contained true -p:SkipGitVersion=true --no-restore --output artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64
+          # The Vosk build target follows the host OS; remove host-only Linux
+          # libraries from the Windows package after the runtime-specific copy.
+          find artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64 -type f \( -name '*.so' -o -name '*.dylib' \) -delete
+          pwsh -NoProfile -File packaging/common/fetch-voice-model.ps1 -OutputRoot artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64
           mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/plugins
           mkdir -p artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/WebInterface
           cp KuwoMusicPlugin/bin/Release/net6.0/KuwoMusicPlugin.dll artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/plugins/
@@ -96,6 +112,26 @@ jobs:
           printf '%s\n' "This folder stores bots, web accounts and rights. Keep it when upgrading." > artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/data/README.txt
           printf 'build-%s\n' "${{ github.run_number }}" > artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64/VERSION
           cd artifacts/windows && zip -qr ../TS3AudioBot-KuwoPlugin-windows-x64.zip TS3AudioBot-KuwoPlugin-windows-x64
+
+      - name: Publish GitHub model mirror
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag='voice-model-vosk-model-small-cn-0.22'
+          archive='.cache/vosk-model-small-cn-0.22.zip'
+          asset='vosk-model-small-cn-0.22.zip'
+          if gh release view "$tag" --json assets --jq '.assets[].name' 2>/dev/null | grep -Fxq "$asset"; then
+            echo "GitHub voice model mirror already exists: $tag"
+          elif gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$archive" --clobber
+          else
+            gh release create "$tag" "$archive" \
+              --prerelease \
+              --title 'Vosk Chinese small model mirror' \
+              --notes 'Pinned mirror of vosk-model-small-cn-0.22. The package workflow validates conf/model.conf before publishing this asset.'
+          fi
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
