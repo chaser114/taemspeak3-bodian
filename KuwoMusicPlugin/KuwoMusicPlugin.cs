@@ -33,12 +33,20 @@ namespace KuwoMusicPlugin
 
 		public MatchCertainty MatchResource(ResolveContext _, string __) => MatchCertainty.Never;
 
-		public async Task<PlayResource> GetResource(ResolveContext ctx, string query)
+		public async Task<PlayResource> GetResource(ResolveContext _, string query)
 		{
-			var results = await Search(ctx, query);
-			if (results.Count == 0)
+			if (string.IsNullOrWhiteSpace(query))
+				throw new InvalidOperationException("A search query is required.");
+
+			// Voice playback always starts the first match, so request its detail
+			// directly instead of making a list request followed by a detail request.
+			var keyword = query.Trim();
+			var song = await RequestSongDetail(keyword, 1);
+			if (song is null)
 				throw new InvalidOperationException("No Kuwo search result was returned.");
-			return await GetResourceById(ctx, results[0]);
+
+			var resource = ToResource(song, keyword, 1);
+			return new PlayResource(resource.Get(AudioUrlKey)!, resource);
 		}
 
 		public async Task<PlayResource> GetResourceById(ResolveContext _, AudioResource resource)

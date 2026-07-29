@@ -31,6 +31,14 @@ namespace TS3ABotUnitTests
 		}
 
 		[Test]
+		public void PreservesNaturalSingerSongQuery()
+		{
+			Assert.IsTrue(VoiceCommandParser.TryParse("音乐机器人，播放刘德华的十七岁", "音乐机器人", false, out var command));
+			Assert.AreEqual(VoiceCommandKind.PlaySong, command.Kind);
+			Assert.AreEqual("刘德华的十七岁", command.Argument);
+		}
+
+		[Test]
 		public void AcceptsRecognizerResultWithWakeWordAfterWakeWasMatched()
 		{
 			Assert.IsTrue(VoiceCommandParser.TryParse("音乐机器人播放周杰伦七里香", "音乐机器人", true, out var command));
