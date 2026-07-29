@@ -291,14 +291,13 @@ namespace TS3AudioBot.Audio
 				return;
 			}
 
-			if (speaker.CommandHasAudio)
-				FinishCommand(sender, speaker);
+			speaker.MarkCommandSegmentEnd(DateTime.UtcNow);
 		}
 
 		private void ExpireCommandWindows(Dictionary<ClientId, SpeakerState> speakers)
 		{
 			var now = DateTime.UtcNow;
-			foreach (var pair in speakers.Where(x => x.Value.CommandMode && now >= x.Value.CommandDeadlineUtc).ToArray())
+			foreach (var pair in speakers.Where(x => x.Value.CommandMode && x.Value.ShouldFinishCommand(now)).ToArray())
 				FinishCommand(pair.Key, pair.Value);
 		}
 
@@ -415,20 +414,22 @@ namespace TS3AudioBot.Audio
 		private sealed class SpeakerState : IDisposable
 		{
 			private readonly Model model;
+			private readonly VoiceCommandTiming commandTiming;
 			public string WakeWord { get; private set; }
 			public OpusDecoder Decoder { get; }
 			public byte[] DecodeBuffer { get; } = new byte[DecoderBufferSize];
 			public VoskRecognizer WakeRecognizer { get; private set; }
 			public VoskRecognizer? CommandRecognizer { get; private set; }
 			public bool CommandMode => CommandRecognizer != null;
-			public DateTime CommandDeadlineUtc { get; private set; }
+			public DateTime CommandDeadlineUtc => commandTiming.CommandDeadlineUtc;
 			public DateTime LastSeenUtc { get; set; } = DateTime.UtcNow;
 			private bool wakeHasAudio;
-			public bool CommandHasAudio { get; private set; }
+			public bool CommandHasAudio => commandTiming.HasCommandAudio;
 
 			public SpeakerState(Model model, string wakeWord, int sampleRate)
 			{
 				this.model = model;
+				commandTiming = new VoiceCommandTiming(CommandWindow);
 				WakeWord = wakeWord;
 				Decoder = OpusDecoder.Create(sampleRate, 1);
 				WakeRecognizer = CreateWakeRecognizer(sampleRate);
@@ -478,15 +479,18 @@ namespace TS3AudioBot.Audio
 					return;
 				CommandRecognizer = new VoskRecognizer(GetModel(), SampleRate);
 				CommandRecognizer.SetMaxAlternatives(0);
-				CommandDeadlineUtc = DateTime.UtcNow + CommandWindow;
+				commandTiming.Begin(DateTime.UtcNow);
 			}
 
 			public void AcceptCommand(byte[] pcm, bool countAsCommandAudio)
 			{
-				CommandRecognizer!.AcceptWaveform(pcm, pcm.Length);
-				if (countAsCommandAudio)
-					CommandHasAudio = true;
+				var endpointDetected = CommandRecognizer!.AcceptWaveform(pcm, pcm.Length);
+				commandTiming.AcceptAudio(countAsCommandAudio, endpointDetected, DateTime.UtcNow);
 			}
+
+			public bool ShouldFinishCommand(DateTime now) => commandTiming.ShouldFinish(now);
+
+			public void MarkCommandSegmentEnd(DateTime now) => commandTiming.MarkSegmentEnd(now);
 
 			private Model GetModel()
 			{
@@ -497,7 +501,7 @@ namespace TS3AudioBot.Audio
 			{
 				CommandRecognizer?.Dispose();
 				CommandRecognizer = null;
-				CommandHasAudio = false;
+				commandTiming.Reset();
 				WakeRecognizer.Reset();
 				wakeHasAudio = false;
 			}
@@ -508,6 +512,59 @@ namespace TS3AudioBot.Audio
 				WakeRecognizer.Dispose();
 				Decoder.Dispose();
 			}
+		}
+	}
+
+	internal sealed class VoiceCommandTiming
+	{
+		private static readonly TimeSpan EndpointGrace = TimeSpan.FromMilliseconds(500);
+		private readonly TimeSpan commandWindow;
+
+		public bool HasCommandAudio { get; private set; }
+		public DateTime CommandDeadlineUtc { get; private set; }
+		public DateTime? EndpointDeadlineUtc { get; private set; }
+
+		public VoiceCommandTiming(TimeSpan commandWindow)
+		{
+			this.commandWindow = commandWindow;
+			Reset();
+		}
+
+		public void Begin(DateTime now)
+		{
+			HasCommandAudio = false;
+			EndpointDeadlineUtc = null;
+			CommandDeadlineUtc = now + commandWindow;
+		}
+
+		public void AcceptAudio(bool isCommandAudio, bool endpointDetected, DateTime now)
+		{
+			// Audio containing only the wake phrase must not start the endpoint
+			// grace period, otherwise a pause before the command could cancel it.
+			if (!isCommandAudio)
+				return;
+
+			HasCommandAudio = true;
+			EndpointDeadlineUtc = null;
+			if (endpointDetected)
+				EndpointDeadlineUtc = now + EndpointGrace;
+		}
+
+		public void MarkSegmentEnd(DateTime now)
+		{
+			if (HasCommandAudio)
+				EndpointDeadlineUtc = now + EndpointGrace;
+		}
+
+		public bool ShouldFinish(DateTime now)
+			=> now >= CommandDeadlineUtc
+				|| (EndpointDeadlineUtc.HasValue && now >= EndpointDeadlineUtc.Value);
+
+		public void Reset()
+		{
+			HasCommandAudio = false;
+			EndpointDeadlineUtc = null;
+			CommandDeadlineUtc = DateTime.MinValue;
 		}
 	}
 }
