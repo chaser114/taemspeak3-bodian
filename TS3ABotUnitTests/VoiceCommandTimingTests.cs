@@ -59,10 +59,31 @@ namespace TS3ABotUnitTests
 		{
 			var timing = StartTiming();
 
-			timing.AcceptAudio(true, false, Start.AddSeconds(1));
-
 			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(3.99)));
 			Assert.IsTrue(timing.ShouldFinish(Start.AddSeconds(4)));
+		}
+
+		[Test]
+		public void CommandAudioUsesShortSilenceFallbackWithoutEndpoint()
+		{
+			var timing = StartTiming();
+
+			timing.AcceptAudio(true, false, Start.AddSeconds(1));
+
+			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(1.99)));
+			Assert.IsTrue(timing.ShouldFinish(Start.AddSeconds(2)));
+		}
+
+		[Test]
+		public void ContinuedCommandAudioExtendsShortSilenceFallback()
+		{
+			var timing = StartTiming();
+
+			timing.AcceptAudio(true, false, Start.AddSeconds(1));
+			timing.AcceptAudio(true, false, Start.AddSeconds(1.8));
+
+			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(2.79)));
+			Assert.IsTrue(timing.ShouldFinish(Start.AddSeconds(2.81)));
 		}
 
 		private static VoiceCommandTiming StartTiming()

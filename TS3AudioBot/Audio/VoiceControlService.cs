@@ -518,11 +518,13 @@ namespace TS3AudioBot.Audio
 	internal sealed class VoiceCommandTiming
 	{
 		private static readonly TimeSpan EndpointGrace = TimeSpan.FromMilliseconds(500);
+		private static readonly TimeSpan CommandSilenceFallback = TimeSpan.FromSeconds(1);
 		private readonly TimeSpan commandWindow;
 
 		public bool HasCommandAudio { get; private set; }
 		public DateTime CommandDeadlineUtc { get; private set; }
 		public DateTime? EndpointDeadlineUtc { get; private set; }
+		public DateTime? CommandSilenceDeadlineUtc { get; private set; }
 
 		public VoiceCommandTiming(TimeSpan commandWindow)
 		{
@@ -534,6 +536,7 @@ namespace TS3AudioBot.Audio
 		{
 			HasCommandAudio = false;
 			EndpointDeadlineUtc = null;
+			CommandSilenceDeadlineUtc = null;
 			CommandDeadlineUtc = now + commandWindow;
 		}
 
@@ -545,6 +548,7 @@ namespace TS3AudioBot.Audio
 				return;
 
 			HasCommandAudio = true;
+			CommandSilenceDeadlineUtc = now + CommandSilenceFallback;
 			EndpointDeadlineUtc = null;
 			if (endpointDetected)
 				EndpointDeadlineUtc = now + EndpointGrace;
@@ -557,13 +561,15 @@ namespace TS3AudioBot.Audio
 		}
 
 		public bool ShouldFinish(DateTime now)
-			=> now >= CommandDeadlineUtc
-				|| (EndpointDeadlineUtc.HasValue && now >= EndpointDeadlineUtc.Value);
+			=> (!HasCommandAudio && now >= CommandDeadlineUtc)
+				|| (EndpointDeadlineUtc.HasValue && now >= EndpointDeadlineUtc.Value)
+				|| (CommandSilenceDeadlineUtc.HasValue && now >= CommandSilenceDeadlineUtc.Value);
 
 		public void Reset()
 		{
 			HasCommandAudio = false;
 			EndpointDeadlineUtc = null;
+			CommandSilenceDeadlineUtc = null;
 			CommandDeadlineUtc = DateTime.MinValue;
 		}
 	}
