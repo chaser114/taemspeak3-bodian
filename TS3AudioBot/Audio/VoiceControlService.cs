@@ -260,7 +260,7 @@ namespace TS3AudioBot.Audio
 				speaker.AcceptWake();
 				speaker.WakeRecognizer.AcceptWaveform(pcm, pcm.Length);
 				var partial = ExtractText(speaker.WakeRecognizer.PartialResult(), "partial");
-				if (ContainsWakeWord(partial, speaker.WakeWord))
+				if (VoiceCommandParser.MatchWakeWord(partial, speaker.WakeWord) != VoiceWakeWordMatchKind.None)
 				{
 					speaker.BeginCommand();
 					// Keep this audio in the command recognizer so commands spoken
@@ -280,8 +280,14 @@ namespace TS3AudioBot.Audio
 			if (!speaker.CommandMode)
 			{
 				var finalWake = ExtractText(speaker.FlushWake(), "text");
-				if (ContainsWakeWord(finalWake, speaker.WakeWord))
+				if (VoiceCommandParser.TryParse(finalWake, speaker.WakeWord, false, out var command))
+				{
+					QueueCommand(sender, command);
+				}
+				else if (VoiceCommandParser.MatchWakeWord(finalWake, speaker.WakeWord) != VoiceWakeWordMatchKind.None)
+				{
 					speaker.BeginCommand();
+				}
 				return;
 			}
 
@@ -321,15 +327,12 @@ namespace TS3AudioBot.Audio
 			if (!VoiceCommandParser.TryParse(text, wake, true, out var command))
 				return;
 
-			_ = scheduler.InvokeAsync(() => ExecuteCommand(sender, command));
+			QueueCommand(sender, command);
 		}
 
-		private static bool ContainsWakeWord(string text, string wakeWord)
+		private void QueueCommand(ClientId sender, VoiceCommand command)
 		{
-			var normalizedText = VoiceCommandParser.Normalize(text);
-			var normalizedWake = VoiceCommandParser.Normalize(wakeWord);
-			return normalizedWake.Length > 0
-				&& normalizedText.Contains(normalizedWake, StringComparison.Ordinal);
+			_ = scheduler.InvokeAsync(() => ExecuteCommand(sender, command));
 		}
 
 		private async Task ExecuteCommand(ClientId sender, VoiceCommand command)
