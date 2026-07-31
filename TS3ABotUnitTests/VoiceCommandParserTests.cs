@@ -97,5 +97,45 @@ namespace TS3ABotUnitTests
 			Assert.AreEqual(VoiceCommandKind.PlaySong, command.Kind);
 			Assert.AreEqual("周杰纶七里香", command.Argument);
 		}
+
+		[Test]
+		public void ParsesFirstUsableSongCandidateAndKeepsAlternatives()
+		{
+			Assert.IsTrue(VoiceCommandParser.TryParseCandidates(
+				new[] { "音乐机器人播放刘德华暗里着迷", "音乐机器人播放刘德华十七岁" },
+				"音乐机器人", false, out var command));
+
+			Assert.AreEqual(VoiceCommandKind.PlaySong, command.Kind);
+			CollectionAssert.AreEqual(new[] { "刘德华暗里着迷", "刘德华十七岁" }, command.SearchQueries);
+		}
+
+		[Test]
+		public void StableControlRequiresTwoMatchingPartials()
+		{
+			var stability = new VoiceCommandStability();
+
+			Assert.IsFalse(stability.TryCommitControl("暂停", "音乐机器人", out _));
+			Assert.IsTrue(stability.TryCommitControl("暂停播放", "音乐机器人", out var command));
+			Assert.AreEqual(VoiceCommandKind.Pause, command.Kind);
+		}
+
+		[Test]
+		public void SongPartialsDoNotCommitAsControl()
+		{
+			var stability = new VoiceCommandStability();
+
+			Assert.IsFalse(stability.TryCommitControl("播放周杰伦", "音乐机器人", out _));
+			Assert.IsFalse(stability.TryCommitControl("播放周杰伦七里香", "音乐机器人", out _));
+		}
+
+		[Test]
+		public void PartialWakeNeedsTwoObservationsButConfirmedWakeIsImmediate()
+		{
+			var stability = new VoiceWakeStability();
+
+			Assert.IsFalse(stability.Confirm("音乐机", "音乐机器人"));
+			Assert.IsTrue(stability.Confirm("音乐机", "音乐机器人"));
+			Assert.IsTrue(stability.Confirm("音乐器人", "音乐机器人"));
+		}
 	}
 }

@@ -18,6 +18,7 @@ using TSLib.Audio;
 using TSLib.Audio.Opus;
 using TSLib.Full;
 using TSLib.Scheduler;
+using TS3AudioBot.ResourceFactories;
 using Vosk;
 
 namespace TS3AudioBot.Audio
@@ -38,6 +39,7 @@ namespace TS3AudioBot.Audio
 		private readonly ConfVoice config;
 		private readonly TsFullClient client;
 		private readonly PlayManager playManager;
+		private readonly ResolveContext resourceResolver;
 		private readonly Player player;
 		private readonly DedicatedTaskScheduler scheduler;
 		private readonly AudioPacketReader packetReader;
@@ -52,11 +54,12 @@ namespace TS3AudioBot.Audio
 
 		public bool Active => running;
 
-		public VoiceControlService(ConfVoice config, TsFullClient client, PlayManager playManager, Player player, DedicatedTaskScheduler scheduler)
+		public VoiceControlService(ConfVoice config, TsFullClient client, PlayManager playManager, ResolveContext resourceResolver, Player player, DedicatedTaskScheduler scheduler)
 		{
 			this.config = config;
 			this.client = client;
 			this.playManager = playManager;
+			this.resourceResolver = resourceResolver;
 			this.player = player;
 			this.scheduler = scheduler;
 			packetReader = new AudioPacketReader { OutStream = this };
@@ -236,6 +239,7 @@ namespace TS3AudioBot.Audio
 			if (frame.Control == PipeControl.EmptyTick)
 			{
 				speaker.LastSeenUtc = DateTime.UtcNow;
+				speaker.EndSpeechSegment();
 				HandleSegmentEnd(frame.Sender, speaker);
 				return;
 			}
@@ -255,12 +259,25 @@ namespace TS3AudioBot.Audio
 
 			speaker.LastSeenUtc = DateTime.UtcNow;
 			var pcm = decoded.ToArray();
+			var activity = speaker.SpeechDetector.Push(pcm);
+			foreach (var speechFrame in activity.Frames)
+				ProcessSpeechFrame(frame.Sender, speaker, speechFrame);
+			if (activity.Ended)
+			{
+				speaker.EndSpeechSegment();
+				HandleSegmentEnd(frame.Sender, speaker);
+			}
+		}
+
+		private void ProcessSpeechFrame(ClientId sender, SpeakerState speaker, byte[] pcm)
+		{
+			pcm = SpeechAudioPreprocessor.Prepare(pcm);
 			if (!speaker.CommandMode)
 			{
 				speaker.AcceptWake();
 				speaker.WakeRecognizer.AcceptWaveform(pcm, pcm.Length);
 				var partial = ExtractText(speaker.WakeRecognizer.PartialResult(), "partial");
-				if (VoiceCommandParser.MatchWakeWord(partial, speaker.WakeWord) != VoiceWakeWordMatchKind.None)
+				if (speaker.ConfirmWake(partial))
 				{
 					speaker.BeginCommand();
 					// Keep this audio in the command recognizer so commands spoken
@@ -271,7 +288,12 @@ namespace TS3AudioBot.Audio
 			}
 			else
 			{
-				speaker.AcceptCommand(pcm, true);
+				var partial = speaker.AcceptCommand(pcm, true);
+				if (speaker.TryCommitStableControl(partial, out var command))
+				{
+					speaker.MarkCommandCommitted();
+					QueueCommand(sender, command);
+				}
 			}
 		}
 
@@ -313,17 +335,17 @@ namespace TS3AudioBot.Audio
 
 		private void FinishCommand(ClientId sender, SpeakerState speaker)
 		{
-			if (!speaker.CommandHasAudio)
+			if (speaker.CommandCommitted || !speaker.CommandHasAudio)
 			{
 				speaker.ResetCommand();
 				return;
 			}
 
-			var text = ExtractText(speaker.CommandRecognizer!.FinalResult(), "text");
+			var candidates = ExtractFinalCandidates(speaker.CommandRecognizer!.FinalResult());
 			var wake = speaker.WakeWord;
 			speaker.ResetCommand();
 
-			if (!VoiceCommandParser.TryParse(text, wake, true, out var command))
+			if (!VoiceCommandParser.TryParseCandidates(candidates, wake, true, out var command))
 				return;
 
 			QueueCommand(sender, command);
@@ -351,7 +373,7 @@ namespace TS3AudioBot.Audio
 					await playManager.Next(invoker);
 					break;
 				case VoiceCommandKind.PlaySong:
-					await playManager.Play(invoker, command.Argument!, "kuwo");
+					await PlaySong(invoker, command);
 					break;
 				}
 			}
@@ -359,6 +381,81 @@ namespace TS3AudioBot.Audio
 			{
 				Log.Warn(ex, "Voice command '{0}' failed.", command.Kind);
 			}
+		}
+
+		private async Task PlaySong(InvokerData invoker, VoiceCommand command)
+		{
+			var queries = command.SearchQueries.Take(3).ToArray();
+			if (queries.Length == 0)
+				throw new InvalidOperationException("Voice playback did not contain a song query.");
+
+			AudioResource? selected = null;
+			var selectedScore = int.MinValue;
+			for (var queryIndex = 0; queryIndex < queries.Length; queryIndex++)
+			{
+				IList<AudioResource> results;
+				try
+				{
+					results = await resourceResolver.Search("kuwo", queries[queryIndex]);
+				}
+				catch (Exception ex)
+				{
+					Log.Debug(ex, "Voice song search failed for candidate {0}.", queries[queryIndex]);
+					continue;
+				}
+
+				for (var resultIndex = 0; resultIndex < results.Count; resultIndex++)
+				{
+					var score = ScoreSongCandidate(queries[queryIndex], results[resultIndex]);
+					// Vosk returns alternatives from most to least likely. Keep that
+					// ordering as the deterministic tie-breaker after title matching.
+					score = score * 10 - queryIndex * 2 - resultIndex;
+					if (score <= selectedScore)
+						continue;
+
+					selected = results[resultIndex];
+					selectedScore = score;
+				}
+			}
+
+			if (selected is null)
+				throw new InvalidOperationException("No Kuwo search result was returned.");
+
+			await playManager.Play(invoker, selected);
+		}
+
+		private static int ScoreSongCandidate(string query, AudioResource resource)
+		{
+			var normalizedQuery = NormalizeSongText(query);
+			var normalizedTitle = NormalizeSongText(resource.ResourceTitle ?? string.Empty);
+			if (normalizedQuery.Length == 0 || normalizedTitle.Length == 0)
+				return 0;
+
+			if (normalizedTitle.Contains(normalizedQuery, StringComparison.Ordinal))
+				return 1000 + normalizedQuery.Length;
+			if (normalizedQuery.Contains(normalizedTitle, StringComparison.Ordinal))
+				return 900 + normalizedTitle.Length;
+
+			var commonLength = LongestCommonSubsequenceLength(normalizedQuery, normalizedTitle);
+			return commonLength * 1000 / Math.Max(normalizedQuery.Length, normalizedTitle.Length);
+		}
+
+		private static string NormalizeSongText(string value)
+			=> VoiceCommandParser.Normalize(value).Replace("的", string.Empty, StringComparison.Ordinal);
+
+		private static int LongestCommonSubsequenceLength(string left, string right)
+		{
+			var previous = new int[right.Length + 1];
+			for (var i = 1; i <= left.Length; i++)
+			{
+				var current = new int[right.Length + 1];
+				for (var j = 1; j <= right.Length; j++)
+					current[j] = left[i - 1] == right[j - 1]
+						? previous[j - 1] + 1
+						: Math.Max(previous[j], current[j - 1]);
+				previous = current;
+			}
+			return previous[right.Length];
 		}
 
 		private Uid ResolveUid(ClientId sender)
@@ -372,6 +469,32 @@ namespace TS3AudioBot.Audio
 		{
 			try { return JObject.Parse(json).Value<string>(property) ?? string.Empty; }
 			catch { return string.Empty; }
+		}
+
+		private static string ExtractPartialText(string json) => ExtractText(json, "partial");
+
+		private static IReadOnlyList<string> ExtractFinalCandidates(string json)
+		{
+			try
+			{
+				var parsed = JObject.Parse(json);
+				var candidates = (parsed["alternatives"] as JArray)?
+					.OfType<JObject>()
+					.Select(x => x.Value<string>("text"))
+					.Where(x => !string.IsNullOrWhiteSpace(x))
+					.Distinct(StringComparer.Ordinal)
+					.Take(3)
+					.ToArray();
+				if (candidates != null && candidates.Length > 0)
+					return candidates;
+
+				var text = parsed.Value<string>("text");
+				return string.IsNullOrWhiteSpace(text) ? Array.Empty<string>() : new[] { text };
+			}
+			catch
+			{
+				return Array.Empty<string>();
+			}
 		}
 
 		private static string ResolveModelPath()
@@ -415,8 +538,11 @@ namespace TS3AudioBot.Audio
 		{
 			private readonly Model model;
 			private readonly VoiceCommandTiming commandTiming;
+			private readonly VoiceWakeStability wakeStability = new VoiceWakeStability();
+			private readonly VoiceCommandStability commandStability = new VoiceCommandStability();
 			public string WakeWord { get; private set; }
 			public OpusDecoder Decoder { get; }
+			public SpeechActivityDetector SpeechDetector { get; }
 			public byte[] DecodeBuffer { get; } = new byte[DecoderBufferSize];
 			public VoskRecognizer WakeRecognizer { get; private set; }
 			public VoskRecognizer? CommandRecognizer { get; private set; }
@@ -425,6 +551,7 @@ namespace TS3AudioBot.Audio
 			public DateTime LastSeenUtc { get; set; } = DateTime.UtcNow;
 			private bool wakeHasAudio;
 			public bool CommandHasAudio => commandTiming.HasCommandAudio;
+			public bool CommandCommitted { get; private set; }
 
 			public SpeakerState(Model model, string wakeWord, int sampleRate)
 			{
@@ -432,6 +559,8 @@ namespace TS3AudioBot.Audio
 				commandTiming = new VoiceCommandTiming(CommandWindow);
 				WakeWord = wakeWord;
 				Decoder = OpusDecoder.Create(sampleRate, 1);
+				SpeechDetector = new SpeechActivityDetector();
+				SpeechDetector.SetHangoverFrames(SpeechActivityDetector.WakeHangoverFrames);
 				WakeRecognizer = CreateWakeRecognizer(sampleRate);
 			}
 
@@ -454,8 +583,11 @@ namespace TS3AudioBot.Audio
 				ResetCommand();
 				WakeRecognizer.Dispose();
 				WakeWord = wakeWord;
+				wakeStability.Reset();
 				WakeRecognizer = CreateWakeRecognizer(sampleRate);
 			}
+
+			public bool ConfirmWake(string partial) => wakeStability.Confirm(partial, WakeWord);
 
 			public void AcceptWake()
 			{
@@ -478,15 +610,22 @@ namespace TS3AudioBot.Audio
 				if (CommandRecognizer != null)
 					return;
 				CommandRecognizer = new VoskRecognizer(GetModel(), SampleRate);
-				CommandRecognizer.SetMaxAlternatives(0);
+				CommandRecognizer.SetMaxAlternatives(3);
+				SpeechDetector.SetHangoverFrames(SpeechActivityDetector.CommandHangoverFrames);
 				commandTiming.Begin(DateTime.UtcNow);
 			}
 
-			public void AcceptCommand(byte[] pcm, bool countAsCommandAudio)
+			public string AcceptCommand(byte[] pcm, bool countAsCommandAudio)
 			{
 				var endpointDetected = CommandRecognizer!.AcceptWaveform(pcm, pcm.Length);
 				commandTiming.AcceptAudio(countAsCommandAudio, endpointDetected, DateTime.UtcNow);
+				return ExtractPartialText(CommandRecognizer.PartialResult());
 			}
+
+			public bool TryCommitStableControl(string partial, out VoiceCommand command)
+				=> commandStability.TryCommitControl(partial, WakeWord, out command);
+
+			public void MarkCommandCommitted() => CommandCommitted = true;
 
 			public bool ShouldFinishCommand(DateTime now) => commandTiming.ShouldFinish(now);
 
@@ -501,15 +640,22 @@ namespace TS3AudioBot.Audio
 			{
 				CommandRecognizer?.Dispose();
 				CommandRecognizer = null;
+				CommandCommitted = false;
 				commandTiming.Reset();
+				wakeStability.Reset();
+				commandStability.Reset();
+				SpeechDetector.SetHangoverFrames(SpeechActivityDetector.WakeHangoverFrames);
 				WakeRecognizer.Reset();
 				wakeHasAudio = false;
 			}
+
+			public void EndSpeechSegment() => SpeechDetector.EndSegment();
 
 			public void Dispose()
 			{
 				CommandRecognizer?.Dispose();
 				WakeRecognizer.Dispose();
+				SpeechDetector.Dispose();
 				Decoder.Dispose();
 			}
 		}
@@ -517,8 +663,8 @@ namespace TS3AudioBot.Audio
 
 	internal sealed class VoiceCommandTiming
 	{
-		private static readonly TimeSpan EndpointGrace = TimeSpan.FromMilliseconds(500);
-		private static readonly TimeSpan CommandSilenceFallback = TimeSpan.FromSeconds(1);
+		private static readonly TimeSpan EndpointGrace = TimeSpan.FromMilliseconds(300);
+		private static readonly TimeSpan CommandSilenceFallback = TimeSpan.FromMilliseconds(700);
 		private readonly TimeSpan commandWindow;
 
 		public bool HasCommandAudio { get; private set; }

@@ -9,11 +9,11 @@
         <label v-if="bots.length" class="bot-select">
           <span class="bot-select-label">控制机器人</span>
           <span class="bot-select-control">
-            <i class="bot-select-icon">♫</i>
+            <i class="bot-select-icon"><b-icon icon="music" size="is-small" /></i>
             <select v-model="botId" aria-label="选择控制机器人" @change="selectBot">
               <option v-for="bot in bots" :key="bot.id" :value="bot.id">{{ bot.name }} · {{ statusText(bot.status) }}</option>
             </select>
-            <i class="bot-select-chevron">⌄</i>
+            <i class="bot-select-chevron"><b-icon icon="chevron-down" size="is-small" /></i>
           </span>
         </label>
       </header>
@@ -23,7 +23,7 @@
         <h2>搜索结果</h2>
         <article v-for="track in results" :key="track.resid + track.type">
           <img v-if="cover(track)" :src="cover(track)" :alt="track.title">
-          <i v-else>♫</i>
+          <i v-else><b-icon icon="music-note" size="is-medium" /></i>
           <div><b>{{ track.title || '未命名歌曲' }}</b></div>
           <button :disabled="busy" @click="play(track)">播放</button>
           <button :disabled="busy" @click="add(track)">加入</button>
@@ -34,7 +34,7 @@
         <h2>最近播放</h2>
         <article v-for="track in state.recent" :key="track.resource.resid + track.type">
           <img v-if="track.coverUrl" :src="track.coverUrl" :alt="track.title">
-          <i v-else>♫</i>
+          <i v-else><b-icon icon="music-note" size="is-medium" /></i>
           <div><b>{{ track.title }}</b></div>
           <button :disabled="busy" @click="play(track.resource)">播放</button>
         </article>
@@ -235,39 +235,60 @@ export default Vue.extend({
 .bot-select-icon {
   position: absolute; z-index: 1; left: 11px; width: 24px; height: 24px; display: grid; place-items: center;
   border-radius: var(--console-radius-sm); background: var(--console-brand-soft); color: var(--console-brand-dark);
-  font-size: 14px; font-style: normal; pointer-events: none;
+  font-style: normal; pointer-events: none;
 }
 .bot-select select {
-  appearance: none; width: 100%; min-width: 0; height: 44px; margin: 0; padding: 0 38px 0 44px;
-  border: 1px solid #d9e7e4; border-radius: var(--console-radius); outline: 0; background: #fff;
-  color: var(--console-ink); font: inherit; cursor: pointer; box-shadow: var(--console-shadow);
+  appearance: none; width: 100%; min-width: 0; height: 46px; margin: 0; padding: 0 38px 0 44px;
+  border: 1px solid #d9e7e4; border-radius: var(--console-radius); outline: 0; background: var(--console-surface);
+  color: var(--console-ink); font: inherit; cursor: pointer;
+  box-shadow: var(--console-shadow-sm);
+  transition: all 0.2s ease;
 }
-.bot-select select:hover { border-color: #a9d9d0; background: #fbfefd; }
+.bot-select select:hover {
+  border-color: #a9d9d0;
+  box-shadow: var(--console-shadow);
+}
 .bot-select select:focus {
   border-color: var(--console-brand);
   box-shadow: 0 0 0 3px rgba(79, 184, 168, 0.14), var(--console-shadow);
 }
 .bot-select-chevron {
-  position: absolute; right: 13px; color: #70828b; font-size: 17px; font-style: normal;
-  line-height: 1; pointer-events: none; transform: translateY(-2px);
+  position: absolute; right: 13px; color: #70828b; font-style: normal;
+  line-height: 1; pointer-events: none;
 }
-.music section { margin-top: 28px; }
-.music section h2 { margin: 0 0 12px; font-size: 16px; }
+.music section { margin-top: 32px; }
+.music section h2 { margin: 0 0 16px; font-size: 17px; font-weight: 700; }
 .music article {
-  display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--console-radius-sm);
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+  border-radius: var(--console-radius);
+  background: var(--console-surface);
+  box-shadow: var(--console-shadow-sm);
+  transition: all 0.3s var(--console-ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .music article:hover { background: var(--console-brand-soft); }
+  .music article:hover {
+    background: var(--console-surface);
+    box-shadow: var(--console-shadow-hover);
+    transform: translateY(-4px);
+  }
 }
 .music article img, .music article i {
-  width: 48px; height: 48px; border-radius: var(--console-radius-sm); object-fit: cover;
+  width: 56px; height: 56px; border-radius: var(--console-radius-sm); object-fit: cover;
   background: var(--console-brand-soft); display: grid; place-items: center; font-style: normal; color: var(--console-brand-dark);
+  box-shadow: var(--console-shadow-sm);
 }
 .music article div { flex: 1; min-width: 0; }
-.music b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.music b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; }
 .music button {
-  height: 36px; border: 0; border-radius: var(--console-radius-sm); background: var(--console-brand);
-  color: #fff; padding: 0 12px; cursor: pointer; font-weight: 600;
+  height: 38px; border: 0; border-radius: var(--console-radius-sm); background: var(--console-brand);
+  color: #fff; padding: 0 16px; cursor: pointer; font-weight: 600; font-size: 14px;
+  box-shadow: var(--console-shadow-sm);
+  transition: all 0.2s ease;
+}
+.music button:hover:not(:disabled) {
+  background: var(--console-brand-dark);
+  box-shadow: var(--console-shadow);
+  transform: translateY(-1px);
 }
 .music button:disabled { opacity: .62; cursor: wait; }
 .error { color: var(--console-danger); margin-top: 12px; }

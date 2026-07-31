@@ -16,8 +16,8 @@ namespace TS3ABotUnitTests
 
 			timing.AcceptAudio(true, true, Start.AddSeconds(1));
 
-			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(1.49)));
-			Assert.IsTrue(timing.ShouldFinish(Start.AddSeconds(1.5)));
+			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(1.29)));
+			Assert.IsTrue(timing.ShouldFinish(Start.AddSeconds(1.3)));
 		}
 
 		[Test]
@@ -28,7 +28,7 @@ namespace TS3ABotUnitTests
 			timing.AcceptAudio(true, true, Start.AddSeconds(1));
 			timing.AcceptAudio(true, false, Start.AddSeconds(1.3));
 
-			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(1.8)));
+			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(1.59)));
 		}
 
 		[Test]
@@ -39,8 +39,8 @@ namespace TS3ABotUnitTests
 			timing.AcceptAudio(true, false, Start.AddSeconds(1));
 			timing.MarkSegmentEnd(Start.AddSeconds(1.2));
 
-			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(1.69)));
-			Assert.IsTrue(timing.ShouldFinish(Start.AddSeconds(1.7)));
+			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(1.49)));
+			Assert.IsTrue(timing.ShouldFinish(Start.AddSeconds(1.5)));
 		}
 
 		[Test]
@@ -51,7 +51,7 @@ namespace TS3ABotUnitTests
 			timing.AcceptAudio(false, true, Start.AddSeconds(1));
 
 			Assert.IsFalse(timing.HasCommandAudio);
-			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(1.5)));
+			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(1.3)));
 		}
 
 		[Test]
@@ -70,8 +70,8 @@ namespace TS3ABotUnitTests
 
 			timing.AcceptAudio(true, false, Start.AddSeconds(1));
 
-			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(1.99)));
-			Assert.IsTrue(timing.ShouldFinish(Start.AddSeconds(2)));
+			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(1.69)));
+			Assert.IsTrue(timing.ShouldFinish(Start.AddSeconds(1.7)));
 		}
 
 		[Test]
@@ -82,8 +82,8 @@ namespace TS3ABotUnitTests
 			timing.AcceptAudio(true, false, Start.AddSeconds(1));
 			timing.AcceptAudio(true, false, Start.AddSeconds(1.8));
 
-			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(2.79)));
-			Assert.IsTrue(timing.ShouldFinish(Start.AddSeconds(2.81)));
+			Assert.IsFalse(timing.ShouldFinish(Start.AddSeconds(2.49)));
+			Assert.IsTrue(timing.ShouldFinish(Start.AddSeconds(2.51)));
 		}
 
 		private static VoiceCommandTiming StartTiming()

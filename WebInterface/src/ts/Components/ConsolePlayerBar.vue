@@ -1,10 +1,12 @@
 <template>
   <section :class="['player-bar', { expanded }]">
-    <button v-if="expanded" type="button" class="back-button" title="返回播放器" @click="expanded = false">‹ 返回</button>
+    <button v-if="expanded" type="button" class="back-button" title="返回播放器" @click="expanded = false">
+      <b-icon icon="chevron-left" size="is-small" /> 返回
+    </button>
 
     <button type="button" class="track-summary" title="打开完整播放器" @click="expanded = !expanded">
       <img v-if="state.current && state.current.coverUrl" :src="state.current.coverUrl" :alt="trackTitle">
-      <span v-else class="cover-placeholder">♫</span>
+      <span v-else class="cover-placeholder"><b-icon icon="music-note" size="is-medium" /></span>
       <span class="track-copy">
         <b>{{ trackTitle }}</b>
         <small>{{ state.current ? (expanded ? '点击返回' : '点击查看歌词') : '搜索后即可加入待播' }}</small>
@@ -26,11 +28,15 @@
     </div>
 
     <div class="controls" aria-label="播放控制">
-      <button type="button" title="上一首" aria-label="上一首" :disabled="!canControl" @click="$emit('previous')">⏮</button>
+      <button type="button" title="上一首" aria-label="上一首" :disabled="!canControl" @click="$emit('previous')">
+        <b-icon icon="skip-previous" />
+      </button>
       <button type="button" class="play-button" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')">
         <b-icon :icon="showPlayIcon ? 'play' : 'pause'" size="is-medium" />
       </button>
-      <button type="button" title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')">⏭</button>
+      <button type="button" title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')">
+        <b-icon icon="skip-next" />
+      </button>
     </div>
 
     <div class="timeline">
@@ -39,17 +45,22 @@
     </div>
 
     <div class="mode-volume" aria-label="播放模式与音量">
-      <button type="button" class="mode-button" :title="loopTitle" :aria-label="loopTitle" :disabled="busy" @click="cycleLoop">{{ loopIcon }}</button>
-      <button type="button" class="mode-button" :class="{ on: !!state.random }" title="随机播放" aria-label="随机播放" :disabled="busy" @click="toggleRandom">⧉</button>
+      <button type="button" class="mode-button" :title="loopTitle" :aria-label="loopTitle" :disabled="busy" @click="cycleLoop">
+        <b-icon :icon="loopModeIcon" size="is-small" />
+      </button>
+      <button type="button" class="mode-button" :class="{ on: !!state.random }" title="随机播放" aria-label="随机播放" :disabled="busy" @click="toggleRandom">
+        <b-icon icon="shuffle" size="is-small" />
+      </button>
       <label class="volume" :title="'音量 ' + Math.round(localVolume)">
-        <span>♪</span>
+        <b-icon icon="volume-high" size="is-small" />
         <input type="range" min="0" max="100" step="1" :value="localVolume" :disabled="busy" @input="onVolumeInput" @change="onVolumeCommit">
         <em>{{ Math.round(localVolume) }}</em>
       </label>
     </div>
 
     <button type="button" class="queue-button" title="待播队列" aria-label="待播队列" @click="$emit('queue')">
-      ☷<em v-if="state.queue.length">{{ state.queue.length }}</em>
+      <b-icon icon="playlist-music" />
+      <em v-if="state.queue.length">{{ state.queue.length }}</em>
     </button>
   </section>
 </template>
@@ -158,10 +169,10 @@ export default Vue.extend({
       const mode = (this.state.loop || "off").toLowerCase();
       return mode === "one" || mode === "all" ? mode : "off";
     },
-    loopIcon(): string {
-      if (this.loopMode === "one") return "①";
-      if (this.loopMode === "all") return "∞";
-      return "→";
+    loopModeIcon(): string {
+      if (this.loopMode === "one") return "repeat-once";
+      if (this.loopMode === "all") return "repeat";
+      return "arrow-right";
     },
     loopTitle(): string {
       if (this.loopMode === "one") return "单曲循环";
@@ -266,9 +277,10 @@ export default Vue.extend({
 <style scoped lang="less">
 .player-bar {
   position: fixed; z-index: 6; left: 220px; right: 0; bottom: 0; height: var(--console-player-h);
-  display: flex; align-items: center; gap: 20px; padding: 12px 28px;
-  background: rgba(255, 255, 255, 0.98); border-top: 1px solid var(--console-line);
-  box-shadow: 0 -8px 24px rgba(30, 50, 55, 0.06);
+  display: flex; align-items: center; gap: 20px; padding: 16px 28px;
+  background: var(--console-surface); border-top: 1px solid var(--console-line);
+  box-shadow: 0 -4px 16px rgba(30, 50, 55, 0.08);
+  backdrop-filter: blur(10px);
   transition: height .32s var(--console-ease-out), gap .32s ease, padding .32s ease, background-color .32s ease;
 }
 button { border: 0; background: transparent; cursor: pointer; }
@@ -277,30 +289,40 @@ button { border: 0; background: transparent; cursor: pointer; }
   color: var(--console-ink); text-align: left;
 }
 .track-summary img, .cover-placeholder {
-  width: 56px; height: 56px; flex: 0 0 56px; border-radius: var(--console-radius-sm); object-fit: cover;
-  background: var(--console-brand-soft); display: grid; place-items: center; color: var(--console-brand-dark); font-size: 22px;
+  width: 72px; height: 72px; flex: 0 0 72px; border-radius: var(--console-radius-sm); object-fit: cover;
+  background: var(--console-brand-soft); display: grid; place-items: center; color: var(--console-brand-dark);
+  box-shadow: var(--console-shadow-sm);
   transition: width .32s var(--console-ease-out), height .32s var(--console-ease-out), flex-basis .32s var(--console-ease-out), border-radius .32s ease;
 }
 .track-copy { min-width: 0; }
 .track-copy b, .track-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.track-copy b { font-size: 14px; }
+.track-copy b { font-size: 15px; font-weight: 600; }
 .track-copy small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
 .controls { display: flex; align-items: center; gap: 8px; }
 .controls button {
-  width: 38px; height: 38px; display: grid; place-items: center; padding: 0;
-  border-radius: 50%; color: #476170; font-size: 17px; line-height: 1;
+  width: 40px; height: 40px; display: grid; place-items: center; padding: 0;
+  border-radius: 50%; color: #476170; line-height: 1;
 }
 @media (hover: hover) and (pointer: fine) {
-  .controls button:hover:not(:disabled) { background: var(--console-brand-soft); color: var(--console-brand-dark); }
+  .controls button:hover:not(:disabled) {
+    background: var(--console-brand-soft);
+    color: var(--console-brand-dark);
+    transform: translateY(-1px);
+  }
 }
 .controls button:disabled { opacity: .5; cursor: wait; }
 .controls .play-button {
-  width: 50px; height: 50px; background: var(--console-brand); color: #fff; font-size: 19px;
-  box-shadow: 0 6px 14px rgba(79, 184, 168, 0.28);
+  width: 56px; height: 56px; background: var(--console-brand); color: #fff; font-size: 20px;
+  box-shadow: 0 4px 12px rgba(79, 184, 168, 0.3);
 }
-.controls .play-button:hover:not(:disabled) { background: var(--console-brand-dark); color: #fff; }
+.controls .play-button:hover:not(:disabled) {
+  background: var(--console-brand-dark);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(79, 184, 168, 0.35);
+  transform: translateY(-1px);
+}
 .timeline { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 140px; }
-.progress-track { height: 4px; flex: 1; overflow: hidden; border-radius: 999px; background: #e4eaec; }
+.progress-track { height: 6px; flex: 1; overflow: hidden; border-radius: 999px; background: #e4eaec; }
 .progress-track i {
   display: block; width: 100%; height: 100%; background: var(--console-brand);
   transform-origin: left center; will-change: transform; transition: transform .08s linear;
@@ -308,13 +330,17 @@ button { border: 0; background: transparent; cursor: pointer; }
 .timeline small { color: var(--console-muted); font-size: 12px; white-space: nowrap; }
 .mode-volume { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .mode-button {
-  width: 34px; height: 34px; border-radius: 50%; color: #526b75; font-size: 14px; font-weight: 700;
+  width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; color: #526b75;
 }
-.mode-button:hover:not(:disabled) { background: var(--console-brand-soft); color: var(--console-brand-dark); }
+.mode-button:hover:not(:disabled) {
+  background: var(--console-brand-soft);
+  color: var(--console-brand-dark);
+  transform: translateY(-1px);
+}
 .mode-button.on { background: var(--console-brand-soft); color: var(--console-brand-dark); }
 .mode-button:disabled { opacity: .5; cursor: wait; }
 .volume { display: flex; align-items: center; gap: 6px; min-width: 118px; color: #6a7885; font-size: 12px; }
-.volume span { width: 16px; text-align: center; color: var(--console-brand); }
+.volume .icon { color: var(--console-brand); }
 .volume input[type="range"] {
   width: 88px; height: 4px; padding: 0; border: 0; border-radius: 999px; background: #e4eaec;
   accent-color: var(--console-brand); cursor: pointer;
@@ -322,9 +348,13 @@ button { border: 0; background: transparent; cursor: pointer; }
 .volume input[type="range"]:disabled { opacity: .5; cursor: wait; }
 .volume em { min-width: 24px; font-style: normal; color: var(--console-muted); text-align: right; }
 .queue-button {
-  position: relative; width: 42px; height: 42px; border-radius: 50%; color: #526b75; font-size: 20px;
+  position: relative; width: 44px; height: 44px; border-radius: 50%; color: #526b75;
 }
-.queue-button:hover { background: var(--console-brand-soft); color: var(--console-brand-dark); }
+.queue-button:hover {
+  background: var(--console-brand-soft);
+  color: var(--console-brand-dark);
+  transform: translateY(-1px);
+}
 .queue-button em {
   position: absolute; top: -2px; right: -2px; min-width: 17px; padding: 0 4px; border-radius: 10px;
   background: var(--console-brand-dark); color: #fff; font-size: 10px; font-style: normal; line-height: 16px; text-align: center;
@@ -360,9 +390,9 @@ button { border: 0; background: transparent; cursor: pointer; }
 .expanded .mode-volume { justify-content: center; }
 .expanded .volume input[type="range"] { width: 140px; }
 .back-button {
-  position: absolute; z-index: 2; top: 20px; left: 24px; min-height: 44px; padding: 8px 10px;
-  display: inline-flex; align-items: center; gap: 4px; border-radius: var(--console-radius-sm);
-  color: var(--console-brand-dark); font-size: 15px; font-weight: 600;
+  position: absolute; z-index: 2; top: 20px; left: 24px; min-height: 44px; padding: 8px 12px;
+  display: inline-flex; align-items: center; gap: 6px; border-radius: var(--console-radius-sm);
+  color: var(--console-brand-dark); font-weight: 600;
 }
 .back-button:hover { color: #185d55; }
 
@@ -370,7 +400,7 @@ button { border: 0; background: transparent; cursor: pointer; }
   .player-bar {
     left: 0;
     bottom: calc(var(--console-nav-h) + env(safe-area-inset-bottom));
-    height: 84px;
+    height: 88px;
     display: grid;
     grid-template-columns: 1fr auto;
     grid-template-rows: 1fr auto;
@@ -379,13 +409,13 @@ button { border: 0; background: transparent; cursor: pointer; }
       "modes queue";
     gap: 4px 8px;
     align-items: center;
-    padding: 8px 12px 8px 12px;
+    padding: 10px 12px 10px 12px;
   }
   .track-summary { grid-area: summary; min-width: 0; max-width: none; }
-  .track-summary img, .cover-placeholder { width: 46px; height: 46px; flex-basis: 46px; }
+  .track-summary img, .cover-placeholder { width: 52px; height: 52px; flex-basis: 52px; }
   .controls { grid-area: controls; gap: 2px; justify-self: end; }
-  .controls button { width: 34px; height: 34px; font-size: 15px; }
-  .controls .play-button { width: 42px; height: 42px; font-size: 17px; }
+  .controls button { width: 34px; height: 34px; }
+  .controls .play-button { width: 42px; height: 42px; }
   .timeline {
     display: block; position: absolute; left: 0; right: 0; top: 0; height: 2px;
     min-width: 0; padding: 0; margin: 0; pointer-events: none;
@@ -393,11 +423,11 @@ button { border: 0; background: transparent; cursor: pointer; }
   .timeline small { display: none; }
   .progress-track { height: 2px; border-radius: 0; }
   .mode-volume { grid-area: modes; gap: 4px; min-width: 0; }
-  .mode-button { width: 30px; height: 30px; font-size: 13px; }
+  .mode-button { width: 30px; height: 30px; }
   .volume { min-width: 0; }
   .volume input[type="range"] { width: 72px; }
   .volume em { display: none; }
-  .queue-button { grid-area: queue; width: 36px; height: 36px; justify-self: end; font-size: 18px; }
+  .queue-button { grid-area: queue; width: 36px; height: 36px; justify-self: end; }
 
   .player-bar.expanded {
     left: 0;
@@ -412,7 +442,7 @@ button { border: 0; background: transparent; cursor: pointer; }
   }
   .expanded .timeline small { display: inline; }
   .expanded .progress-track { height: 4px; border-radius: 999px; }
-  .expanded .track-summary img, .expanded .cover-placeholder { width: 56px; height: 56px; flex-basis: 56px; }
+  .expanded .track-summary img, .expanded .cover-placeholder { width: 64px; height: 64px; flex-basis: 64px; }
   .expanded .mode-volume { width: 100%; max-width: 430px; justify-content: center; }
   .expanded .volume em { display: inline; }
   .expanded .volume input[type="range"] { width: 120px; }

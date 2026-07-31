@@ -55,27 +55,39 @@ export default Vue.extend({
 .drawer-wrap { position: fixed; z-index: 8; inset: 0; }
 .shade { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(31, 43, 54, .18); cursor: pointer; }
 .drawer {
-  position: absolute; top: 76px; right: 0; bottom: 92px; width: 92vw; max-width: 390px;
-  display: flex; flex-direction: column; background: rgba(255, 255, 255, .96);
-  border-left: 1px solid var(--console-line); box-shadow: -12px 0 36px rgba(27, 41, 54, .14);
-  backdrop-filter: blur(18px);
+  position: absolute; top: 76px; right: 0; bottom: 92px; width: 92vw; max-width: 400px;
+  display: flex; flex-direction: column; background: var(--console-surface);
+  border-left: 1px solid var(--console-line);
+  box-shadow: -8px 0 32px rgba(27, 41, 54, 0.12);
+  backdrop-filter: blur(10px);
 }
 header { display: flex; justify-content: space-between; align-items: center; padding: 22px 20px 16px; border-bottom: 1px solid var(--console-line); }
 header span, header small { display: block; }
 header span { font-size: 17px; font-weight: 700; }
 header small { margin-top: 4px; color: #8693a0; font-size: 12px; }
 header button {
-  width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 0;
+  width: 38px; height: 38px; min-width: 38px; min-height: 38px; display: grid; place-items: center; padding: 0; border: 0;
   border-radius: 50%; background: #f0f4f4; color: #687684; cursor: pointer; line-height: 1;
 }
 .items { flex: 1; overflow: auto; padding: 10px; }
 .items article {
-  display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 10px;
-  border-radius: 9px; outline: 0;
+  display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 12px;
+  border-radius: var(--console-radius-sm); outline: 0;
+  transition: all 0.2s ease;
 }
 .items article.selectable { cursor: pointer; }
-.items article.selectable:hover, .items article.selectable:focus-visible { background: var(--console-brand-soft); }
-.items article.active { background: #e9f6f3; color: var(--console-brand-dark); }
+.items article.selectable:hover, .items article.selectable:focus-visible {
+  background: var(--console-brand-soft);
+  transform: translateX(-2px);
+}
+.items article.active {
+  background: linear-gradient(135deg, #e9f6f3 0%, #f0faf8 100%);
+  border-left: 3px solid var(--console-brand);
+  padding-left: 9px;
+  color: var(--console-brand-dark);
+  font-weight: 600;
+  box-shadow: var(--console-shadow-sm);
+}
 .items i { width: 26px; color: #9aa5af; font-style: normal; font-size: 12px; }
 .items div { min-width: 0; flex: 1; }
 .items strong, .items small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

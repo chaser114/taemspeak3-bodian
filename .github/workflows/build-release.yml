@@ -87,9 +87,9 @@ jobs:
         env:
           VOICE_MODEL_ARCHIVE: ${{ github.workspace }}/.cache/vosk-model-small-cn-0.22.zip
         run: |
-          dotnet restore TS3AudioBot/TS3AudioBot.csproj --runtime win-x64 -p:SkipGitVersion=true
-          dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj --runtime win-x64 -p:SkipGitVersion=true
-          dotnet publish TS3AudioBot/TS3AudioBot.csproj --configuration Release --runtime win-x64 --self-contained true -p:SkipGitVersion=true --no-restore --output artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64
+          dotnet restore TS3AudioBot/TS3AudioBot.csproj --runtime win-x64 -p:RuntimeIdentifier=win-x64 -p:SkipGitVersion=true
+          dotnet restore KuwoMusicPlugin/KuwoMusicPlugin.csproj --runtime win-x64 -p:RuntimeIdentifier=win-x64 -p:SkipGitVersion=true
+          dotnet publish TS3AudioBot/TS3AudioBot.csproj --configuration Release --runtime win-x64 -p:RuntimeIdentifier=win-x64 --self-contained true -p:SkipGitVersion=true --no-restore --output artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64
           # The Vosk build target follows the host OS; remove host-only Linux
           # libraries from the Windows package after the runtime-specific copy.
           find artifacts/windows/TS3AudioBot-KuwoPlugin-windows-x64 -type f \( -name '*.so' -o -name '*.dylib' \) -delete

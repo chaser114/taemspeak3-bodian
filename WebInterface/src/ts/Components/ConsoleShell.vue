@@ -2,13 +2,13 @@
   <div class="shell">
     <aside class="side">
       <router-link class="logo" to="/music">
-        <span class="symbol">♪</span>
+        <span class="symbol"><b-icon icon="music" size="is-small" /></span>
         <strong>{{ brandName }}</strong>
       </router-link>
       <nav>
-        <router-link to="/music" title="点歌"><i class="symbol">⌕</i><span>点歌</span></router-link>
-        <router-link to="/recent" title="最近播放"><i class="symbol">↶</i><span>最近播放</span></router-link>
-        <router-link v-if="isAdmin" to="/admin" title="管理"><i class="symbol">⚙</i><span>管理</span></router-link>
+        <router-link to="/music" title="点歌"><b-icon icon="magnify" /><span>点歌</span></router-link>
+        <router-link to="/recent" title="最近播放"><b-icon icon="history" /><span>最近播放</span></router-link>
+        <router-link v-if="isAdmin" to="/admin" title="管理"><b-icon icon="cog" /><span>管理</span></router-link>
       </nav>
       <div class="side-footer">
         <button
@@ -27,28 +27,24 @@
 
     <section class="shell-main">
       <header class="header">
-        <div class="history-actions">
-          <button type="button" title="返回" @click="$router.go(-1)">‹</button>
-          <button type="button" title="前进" @click="$router.go(1)">›</button>
-        </div>
         <form class="header-search" @submit.prevent="submitSearch">
-          <i class="symbol">⌕</i>
+          <b-icon icon="magnify" />
           <input v-model.trim="query" placeholder="搜索音乐、歌手或专辑">
-          <button type="submit" title="搜索">→</button>
+          <button type="submit" title="搜索"><b-icon icon="arrow-right" size="is-small" /></button>
         </form>
         <div class="account">
           <span class="account-name">{{ botName || brandName }}</span>
           <span :class="['connection-dot', connectionState]" :title="connectionTitle" :aria-label="connectionTitle"></span>
-          <button type="button" class="account-logout" title="退出登录" @click="logout"><i class="symbol">⇥</i><span>退出</span></button>
+          <button type="button" class="account-logout" title="退出登录" @click="logout"><b-icon icon="logout" size="is-small" /><span>退出</span></button>
         </div>
       </header>
       <main class="shell-content"><slot/></main>
     </section>
 
     <nav class="mobile-nav">
-      <router-link to="/music" title="点歌"><i class="symbol">⌕</i><span>点歌</span></router-link>
-      <router-link to="/recent" title="最近播放"><i class="symbol">↶</i><span>最近</span></router-link>
-      <router-link v-if="isAdmin" to="/admin" title="管理"><i class="symbol">⚙</i><span>管理</span></router-link>
+      <router-link to="/music" title="点歌"><b-icon icon="magnify" /><span>点歌</span></router-link>
+      <router-link to="/recent" title="最近播放"><b-icon icon="history" /><span>最近</span></router-link>
+      <router-link v-if="isAdmin" to="/admin" title="管理"><b-icon icon="cog" /><span>管理</span></router-link>
     </nav>
 
     <UpdatePanel :open="updateOpen" @close="updateOpen = false" @applied="onApplied"/>
@@ -166,32 +162,57 @@ export default Vue.extend({
 .side {
   position: fixed; z-index: 4; top: 0; bottom: 0; width: 220px; padding: 24px 14px;
   background: var(--console-surface); border-right: 1px solid var(--console-line);
+  box-shadow: var(--console-shadow-sm);
   display: flex; flex-direction: column;
 }
 .logo {
-  display: flex; align-items: center; gap: 10px; padding: 0 10px; color: var(--console-ink);
-  text-decoration: none; font-size: 18px; font-weight: 700;
+  display: flex; align-items: center; gap: 12px; padding: 0 10px; color: var(--console-ink);
+  text-decoration: none; font-size: 19px; font-weight: 700;
 }
 .logo span {
-  width: 36px; height: 36px; display: grid; place-items: center; color: #fff;
-  background: var(--console-brand); border-radius: var(--console-radius-sm);
-  box-shadow: 0 6px 14px rgba(79, 184, 168, 0.28);
+  width: 40px; height: 40px; display: grid; place-items: center; color: #fff;
+  background: var(--console-brand); border-radius: var(--console-radius);
+  box-shadow: 0 4px 12px rgba(79, 184, 168, 0.3);
 }
 .side nav { display: grid; gap: 6px; margin-top: 40px; }
 .side nav a {
   height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 14px; border: 0;
   border-radius: var(--console-radius-sm); background: transparent; color: #647182;
   font: inherit; text-decoration: none; cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+.side nav a::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: var(--console-brand);
+  border-radius: 0 2px 2px 0;
+  transition: height 0.2s ease;
 }
 .side nav a.router-link-active {
-  color: #fff; background: var(--console-brand);
-  box-shadow: 0 8px 18px rgba(79, 184, 168, 0.22);
+  color: var(--console-brand-dark);
+  background: var(--console-brand-soft);
+  font-weight: 600;
+}
+.side nav a.router-link-active::before {
+  height: 24px;
 }
 .side-footer { margin-top: auto; display: grid; gap: 8px; }
 .version-chip {
   width: 100%; min-height: 40px; display: flex; align-items: center; justify-content: space-between;
   gap: 8px; padding: 8px 12px; border: 1px solid var(--console-line); border-radius: var(--console-radius-sm);
-  background: #f7fafa; color: #6a7885; font: inherit; font-size: 12px; cursor: pointer; text-align: left;
+  background: var(--console-surface); color: #6a7885; font: inherit; font-size: 12px; cursor: pointer; text-align: left;
+  box-shadow: var(--console-shadow-sm);
+  transition: all 0.2s ease;
+}
+.version-chip:hover {
+  box-shadow: var(--console-shadow);
+  transform: translateY(-1px);
 }
 .version-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .version-chip em {
@@ -204,23 +225,22 @@ export default Vue.extend({
 .shell-main { min-width: 0; flex: 1; margin-left: 220px; padding-bottom: calc(var(--console-player-h) + 12px); }
 .header {
   height: 72px; display: flex; align-items: center; gap: 16px; padding: 0 28px;
-  background: rgba(255, 255, 255, 0.92); border-bottom: 1px solid var(--console-line);
-  position: sticky; top: 0; z-index: 3; backdrop-filter: blur(14px);
-}
-.history-actions { display: flex; gap: 8px; }
-.history-actions button {
-  width: 36px; height: 36px; border: 0; border-radius: 50%; background: #eef2f3; color: #566473;
-  cursor: pointer; font-size: 22px;
+  background: var(--console-surface); border-bottom: 1px solid var(--console-line);
+  position: sticky; top: 0; z-index: 3;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--console-shadow-sm);
 }
 .header-search {
-  width: 52vw; max-width: 520px; height: 44px; display: flex; align-items: center; gap: 8px;
-  padding-left: 14px; border-radius: 999px; background: #f1f4f5; color: #8b97a4;
+  width: 52vw; max-width: 520px; height: 46px; display: flex; align-items: center; gap: 8px;
+  padding-left: 16px; border-radius: var(--console-radius-full); background: var(--console-surface); color: #8b97a4;
   border: 1px solid transparent;
+  box-shadow: var(--console-shadow-sm);
+  transition: all 0.2s ease;
 }
 .header-search:focus-within {
   border-color: rgba(79, 184, 168, 0.35);
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(79, 184, 168, 0.12);
+  box-shadow: 0 0 0 3px rgba(79, 184, 168, 0.12), var(--console-shadow);
 }
 .header-search input {
   min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; font: inherit; color: var(--console-ink);
@@ -231,13 +251,26 @@ export default Vue.extend({
 }
 .account { margin-left: auto; display: flex; align-items: center; gap: 8px; color: #778494; font-size: 13px; }
 .connection-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: #aab5c0; box-shadow: 0 0 0 3px rgba(170, 181, 192, 0.14); }
-.connection-dot.connected { background: #35b878; box-shadow: 0 0 0 3px rgba(53, 184, 120, 0.16); }
+.connection-dot.connected {
+  background: #35b878;
+  box-shadow: 0 0 0 3px rgba(53, 184, 120, 0.2);
+  animation: pulse-connection 2s ease-in-out infinite;
+}
+@keyframes pulse-connection {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(53, 184, 120, 0.2); }
+  50% { box-shadow: 0 0 0 6px rgba(53, 184, 120, 0.12); }
+}
 .connection-dot.connecting { background: #e0a52f; box-shadow: 0 0 0 3px rgba(224, 165, 47, 0.16); }
 .account-logout {
-  height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px;
+  height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px;
   border: 0; border-radius: var(--console-radius-sm); background: transparent; color: #778494; cursor: pointer;
+  transition: all 0.2s ease;
 }
-.account-logout:hover { background: #f3f5f6; color: var(--console-ink); }
+.account-logout:hover {
+  background: var(--console-brand-soft);
+  color: var(--console-brand-dark);
+  transform: translateY(-1px);
+}
 .shell-content { min-height: calc(100vh - 72px); }
 .mobile-nav { display: none; }
 
@@ -248,7 +281,6 @@ export default Vue.extend({
     padding-bottom: calc(76px + var(--console-nav-h) + env(safe-area-inset-bottom) + 8px);
   }
   .header { height: 60px; gap: 10px; padding: 0 14px; }
-  .history-actions { display: none; }
   .header-search { width: auto; flex: 1; max-width: none; height: 42px; }
   .account { gap: 7px; }
   .account-name, .account-logout span { display: none; }
@@ -261,11 +293,10 @@ export default Vue.extend({
     box-shadow: 0 -6px 20px rgba(30, 50, 55, 0.05);
   }
   .mobile-nav a, .mobile-nav button {
-    flex: 1 1 0; min-width: 0; min-height: 48px; display: grid; place-items: center; gap: 3px;
+    flex: 1 1 0; min-width: 0; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
     border: 0; border-radius: var(--console-radius-sm); background: transparent; color: #6a7885;
     font: inherit; font-size: 12px; text-decoration: none; cursor: pointer;
   }
-  .mobile-nav a .symbol, .mobile-nav button .symbol { font-size: 18px; }
   .mobile-nav a.router-link-active {
     color: var(--console-brand-dark);
     background: var(--console-brand-soft);

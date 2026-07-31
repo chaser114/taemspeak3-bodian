@@ -50,6 +50,10 @@
     <PackageReference Include="PlaylistsNET" Version="1.1.2" />
     <PackageReference Include="SixLabors.ImageSharp" Version="1.0.0" />
     <PackageReference Include="Vosk" Version="0.3.38" GeneratePathProperty="true" />
+    <PackageReference Include="WebRtcVadSharp" Version="1.3.2"
+      Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')" />
+    <PackageReference Include="WebRtcVadSharpLinux" Version="1.3.2"
+      Condition="'$(RuntimeIdentifier)' == 'linux-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' != 'Windows_NT')" />
     <TrimmerRootAssembly Include="System.Text.Json" />
   </ItemGroup>
 

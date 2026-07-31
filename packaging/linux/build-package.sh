@@ -47,14 +47,14 @@ test -s "$repo/WebInterface/dist/bundle.js"
 grep -Fq "bot-select-icon" "$repo/WebInterface/dist/bundle.js"
 
 printf '%s\n' "Restoring Linux runtime assets..."
-"$dotnet_cmd" restore "$repo/TS3AudioBot/TS3AudioBot.csproj" --runtime linux-x64 -p:SkipGitVersion=true
-"$dotnet_cmd" restore "$repo/KuwoMusicPlugin/KuwoMusicPlugin.csproj" --runtime linux-x64 -p:SkipGitVersion=true
+"$dotnet_cmd" restore "$repo/TS3AudioBot/TS3AudioBot.csproj" --runtime linux-x64 -p:RuntimeIdentifier=linux-x64 -p:SkipGitVersion=true
+"$dotnet_cmd" restore "$repo/KuwoMusicPlugin/KuwoMusicPlugin.csproj" --runtime linux-x64 -p:RuntimeIdentifier=linux-x64 -p:SkipGitVersion=true
 
 printf '%s\n' "Building bot and plugin..."
 "$dotnet_cmd" build "$repo/KuwoMusicPlugin/KuwoMusicPlugin.csproj" -c Release -p:SkipGitVersion=true --no-restore
 rm -rf "$output_dir"
 mkdir -p "$output_dir"
-"$dotnet_cmd" publish "$repo/TS3AudioBot/TS3AudioBot.csproj" -c Release -r linux-x64 -p:SkipGitVersion=true --self-contained true --no-restore -o "$output_dir"
+"$dotnet_cmd" publish "$repo/TS3AudioBot/TS3AudioBot.csproj" -c Release -r linux-x64 -p:RuntimeIdentifier=linux-x64 -p:SkipGitVersion=true --self-contained true --no-restore -o "$output_dir"
 # Vosk's package target follows the build host OS; this package is Linux-only.
 rm -f "$output_dir/libgcc_s_seh-1.dll" "$output_dir/libstdc++-6.dll" \
 	"$output_dir/libvosk.dll" "$output_dir/libwinpthread-1.dll"
