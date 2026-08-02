@@ -545,7 +545,7 @@ input, select {
   border-radius: var(--console-radius-sm); background: #fff; color: var(--console-ink); font: inherit;
 }
 input:focus, select:focus {
-  outline: 0; border-color: var(--console-brand); box-shadow: 0 0 0 3px rgba(79, 184, 168, 0.14);
+  outline: 0; border-color: var(--console-brand); box-shadow: 0 0 0 3px var(--console-brand-soft);
 }
 .checkbox-row { display: flex; align-items: center; gap: 8px; }
 .checkbox-row input { width: 18px; height: 18px; margin: 0; accent-color: var(--console-brand); }
@@ -615,4 +615,28 @@ article small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
   .section-heading { flex-wrap: wrap; }
   .section-heading .text-button { width: 100%; }
 }
+
+/* Shared black / white / red admin surface. */
+.admin { max-width: 1120px; padding: 48px 40px 60px; }
+.admin > header p { color: var(--console-brand); }
+.admin h1 { color: var(--console-ink); font-size: 34px; letter-spacing: -.025em; }
+.update-card, .service-card, .grid section { border-color: var(--console-line); background: var(--console-surface); box-shadow: var(--console-shadow-sm); }
+.update-card { margin-top: 30px; border-radius: 14px; }
+.update-card.highlight { border-color: rgba(235, 173, 0, .35); background: var(--console-warn-soft); }
+.service-card, .grid section { border-radius: 14px; }
+.service-actions .secondary, .secondary { background: var(--console-surface-2); color: var(--console-muted); }
+.log-view { background: #111113; color: #d7d7dc; border-radius: 10px; }
+.grid { gap: 14px; margin-top: 14px; }
+label { color: var(--console-ink); }
+input, select { border-color: var(--console-line-strong); border-radius: 9px; background: var(--console-surface-2); color: var(--console-ink); }
+input:focus, select:focus { border-color: var(--console-brand); box-shadow: 0 0 0 3px var(--console-brand-soft); }
+article { border-top-color: var(--console-line); }
+.status { background: var(--console-surface-2); color: var(--console-muted); }
+.status.connected { background: rgba(48, 209, 88, .14); color: #30a94c; }
+.status.connecting { background: var(--console-warn-soft); color: var(--console-warn); }
+.modal-mask { background: rgba(0, 0, 0, .52); }
+.edit-modal { border: 1px solid var(--console-line); border-radius: 18px; background: var(--console-surface); color: var(--console-ink); }
+.close { background: var(--console-surface-2); color: var(--console-muted); }
+@media (max-width: 1000px) { .admin { padding: 36px 20px 48px; } }
+@media (max-width: 600px) { .admin { padding: 30px 16px 42px; } .admin h1 { font-size: 28px; } }
 </style>

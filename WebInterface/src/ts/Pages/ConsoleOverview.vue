@@ -1,11 +1,17 @@
 <template>
   <main class="music">
-    <section v-if="!state.configured"><h1>还没有连接机器人</h1></section>
+    <section v-if="!state.configured" class="empty-state">
+      <span class="empty-icon"><b-icon icon="music-off" /></span>
+      <h1>还没有连接机器人</h1>
+      <p>请先在管理页面完成 TeamSpeak 连接。</p>
+    </section>
     <template v-else>
-      <header>
-        <p>{{ recentOnly ? '最近播放' : '点歌' }}</p>
-        <h1>{{ recentOnly ? '最近播放' : '想听什么？' }}</h1>
-        <span v-if="!recentOnly">在顶部搜索框中搜索歌曲、歌手或专辑。</span>
+      <header class="music-heading">
+        <div>
+          <p class="eyebrow">{{ recentOnly ? '播放记录' : '点歌' }}</p>
+          <h1>{{ recentOnly ? '最近播放' : '想听什么？' }}</h1>
+          <span v-if="!recentOnly">搜索歌曲、歌手或专辑，马上加入播放队列。</span>
+        </div>
         <label v-if="bots.length" class="bot-select">
           <span class="bot-select-label">控制机器人</span>
           <span class="bot-select-control">
@@ -19,26 +25,29 @@
       </header>
       <p v-if="error" class="error">{{ error }}</p>
 
-      <section v-if="!recentOnly && results.length">
-        <h2>搜索结果</h2>
-        <article v-for="track in results" :key="track.resid + track.type">
-          <img v-if="cover(track)" :src="cover(track)" :alt="track.title">
-          <i v-else><b-icon icon="music-note" size="is-medium" /></i>
-          <div><b>{{ track.title || '未命名歌曲' }}</b></div>
-          <button :disabled="busy" @click="play(track)">播放</button>
-          <button :disabled="busy" @click="add(track)">加入</button>
-        </article>
+      <section v-if="!recentOnly && results.length" class="results-section">
+        <div class="section-title"><h2>搜索结果</h2><span>{{ results.length }} 首歌曲</span></div>
+        <div class="track-list">
+          <article v-for="(track, index) in results" :key="track.resid + track.type" class="track-row">
+            <span class="track-index">{{ String(index + 1).padStart(2, '0') }}</span>
+            <img v-if="cover(track)" :src="cover(track)" :alt="track.title">
+            <i v-else class="cover-placeholder"><b-icon icon="music-note" /></i>
+            <div class="track-info"><b>{{ track.title || '未命名歌曲' }}</b><small>{{ track.type || '歌曲' }}</small></div>
+            <button class="row-action secondary" :disabled="busy" title="加入待播队列" @click="add(track)"><b-icon icon="playlist-plus" size="is-small" /><span>加入</span></button>
+            <button class="row-action primary" :disabled="busy" title="立即播放" @click="play(track)"><b-icon icon="play" size="is-small" /><span>播放</span></button>
+          </article>
+        </div>
       </section>
 
-      <section v-if="recentOnly">
-        <h2>最近播放</h2>
-        <article v-for="track in state.recent" :key="track.resource.resid + track.type">
-          <img v-if="track.coverUrl" :src="track.coverUrl" :alt="track.title">
-          <i v-else><b-icon icon="music-note" size="is-medium" /></i>
-          <div><b>{{ track.title }}</b></div>
-          <button :disabled="busy" @click="play(track.resource)">播放</button>
-        </article>
-        <p v-if="!state.recent.length">还没有播放记录。</p>
+      <section v-if="recentOnly || !results.length" class="recent-section">
+        <div class="section-title"><h2>最近播放</h2><router-link v-if="!recentOnly && state.recent.length" to="/recent">查看全部</router-link></div>
+        <div v-if="state.recent.length" class="recent-strip">
+          <article v-for="track in state.recent" :key="track.resource.resid + track.type" class="recent-card" @click="play(track.resource)">
+            <div class="recent-cover"><img v-if="track.coverUrl" :src="track.coverUrl" :alt="track.title"><i v-else><b-icon icon="music-note" /></i><button type="button" title="播放" @click.stop="play(track.resource)"><b-icon icon="play" size="is-small" /></button></div>
+            <b>{{ track.title }}</b><small>{{ track.type || '歌曲' }}</small>
+          </article>
+        </div>
+        <p v-else class="empty-copy">还没有播放记录。</p>
       </section>
 
       <ConsolePlayerBar
@@ -225,80 +234,75 @@ export default Vue.extend({
 </script>
 
 <style scoped lang="less">
-.music { max-width: 1050px; margin: auto; padding: 36px 28px 48px; }
-.music header p { margin: 0 0 6px; color: var(--console-brand-dark); font-weight: 700; font-size: 13px; }
-.music header h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
-.music header > span { display: block; margin-top: 8px; color: var(--console-muted); font-size: 14px; line-height: 1.55; }
-.bot-select { display: inline-flex; align-items: center; gap: 12px; margin-top: 16px; color: #536572; font-size: 13px; }
-.bot-select-label { color: #667684; font-weight: 600; white-space: nowrap; }
-.bot-select-control { position: relative; display: flex; align-items: center; min-width: 250px; }
-.bot-select-icon {
-  position: absolute; z-index: 1; left: 11px; width: 24px; height: 24px; display: grid; place-items: center;
-  border-radius: var(--console-radius-sm); background: var(--console-brand-soft); color: var(--console-brand-dark);
-  font-style: normal; pointer-events: none;
+.music { max-width: 1120px; margin: 0 auto; padding: 54px 40px 48px; }
+.music-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
+.eyebrow { margin: 0 0 8px; color: var(--console-brand); font-size: 13px; font-weight: 700; }
+.music-heading h1 { margin: 0; color: var(--console-ink); font-size: clamp(30px, 4vw, 44px); line-height: 1.08; letter-spacing: -.025em; }
+.music-heading > div > span { display: block; margin-top: 12px; color: var(--console-muted); font-size: 14px; }
+.bot-select { display: inline-flex; align-items: center; gap: 12px; flex: 0 0 auto; color: var(--console-muted); font-size: 12px; }
+.bot-select-label { white-space: nowrap; }
+.bot-select-control { position: relative; display: flex; align-items: center; min-width: 230px; }
+.bot-select-icon { position: absolute; z-index: 1; left: 12px; display: grid; place-items: center; color: var(--console-brand); font-style: normal; pointer-events: none; }
+.bot-select select { appearance: none; width: 100%; height: 40px; padding: 0 34px 0 34px; border: 1px solid var(--console-line); border-radius: 10px; outline: 0; background: var(--console-surface-2); color: var(--console-ink); cursor: pointer; }
+.bot-select select:focus { border-color: var(--console-brand); box-shadow: 0 0 0 3px var(--console-brand-soft); }
+.bot-select-chevron { position: absolute; right: 11px; color: var(--console-muted); font-style: normal; pointer-events: none; }
+.music section { margin-top: 50px; }
+.section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.section-title h2 { margin: 0; color: var(--console-ink); font-size: 19px; letter-spacing: -.01em; }
+.section-title > span, .section-title a { color: var(--console-muted); font-size: 12px; text-decoration: none; }
+.section-title a:hover { color: var(--console-brand); }
+.track-list { border-top: 1px solid var(--console-line); }
+.track-row { display: flex; align-items: center; gap: 14px; min-height: 76px; padding: 10px 4px; border-bottom: 1px solid var(--console-line); }
+.track-row:hover { background: var(--console-hover); }
+.track-index { width: 26px; flex: 0 0 26px; color: var(--console-muted-2); font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
+.track-row img, .track-row .cover-placeholder { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 9px; object-fit: cover; background: var(--console-surface-3); color: var(--console-muted); }
+.cover-placeholder { display: grid; place-items: center; font-style: normal; }
+.track-info { min-width: 0; flex: 1; }
+.track-info b, .track-info small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track-info b { color: var(--console-ink); font-size: 14px; font-weight: 600; }
+.track-info small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
+.row-action { min-width: 72px; height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 10px; border: 1px solid transparent; border-radius: 9px; cursor: pointer; font-size: 12px; font-weight: 600; }
+.row-action.secondary { border-color: var(--console-line); background: transparent; color: var(--console-muted); }
+.row-action.secondary:hover { border-color: var(--console-line-strong); color: var(--console-ink); }
+.row-action.primary { background: var(--console-brand); color: #fff; }
+.row-action.primary:hover { background: var(--console-brand-dark); }
+.row-action:disabled { opacity: .5; cursor: wait; }
+.recent-strip { display: flex; gap: 16px; overflow-x: auto; padding: 2px 2px 12px; scrollbar-width: thin; }
+.recent-card { width: 170px; flex: 0 0 170px; cursor: pointer; }
+.recent-cover { position: relative; width: 170px; height: 170px; overflow: hidden; border-radius: 13px; background: var(--console-surface-3); }
+.recent-cover img, .recent-cover > i { width: 100%; height: 100%; display: grid; place-items: center; object-fit: cover; color: var(--console-muted); font-size: 30px; font-style: normal; }
+.recent-cover::after { content: ""; position: absolute; inset: 45% 0 0; background: linear-gradient(transparent, rgba(0,0,0,.35)); pointer-events: none; opacity: 0; transition: opacity 160ms ease; }
+.recent-card:hover .recent-cover::after { opacity: 1; }
+.recent-cover button { position: absolute; right: 10px; bottom: 10px; z-index: 1; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--console-brand); color: #fff; opacity: 0; cursor: pointer; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; }
+.recent-card:hover .recent-cover button { opacity: 1; transform: translateY(0); }
+.recent-card > b, .recent-card > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-card > b { margin-top: 10px; color: var(--console-ink); font-size: 13px; font-weight: 600; }
+.recent-card > small { margin-top: 3px; color: var(--console-muted); font-size: 12px; }
+.empty-state { min-height: 55vh; display: grid; place-content: center; justify-items: center; text-align: center; }
+.empty-icon { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 18px; background: var(--console-brand-soft); color: var(--console-brand); }
+.empty-state h1 { margin: 18px 0 6px; font-size: 24px; }
+.empty-state p, .empty-copy { color: var(--console-muted); font-size: 14px; }
+.error { margin: 18px 0 0; color: var(--console-danger); font-size: 13px; }
+@media (max-width: 1023px) {
+  .music { padding: 34px 20px 38px; }
+  .music-heading { display: block; }
+  .music-heading h1 { font-size: 34px; }
+  .bot-select { display: flex; align-items: center; margin-top: 26px; }
+  .bot-select-control { flex: 1; min-width: 0; }
+  .music section { margin-top: 38px; }
 }
-.bot-select select {
-  appearance: none; width: 100%; min-width: 0; height: 46px; margin: 0; padding: 0 38px 0 44px;
-  border: 1px solid #d9e7e4; border-radius: var(--console-radius); outline: 0; background: var(--console-surface);
-  color: var(--console-ink); font: inherit; cursor: pointer;
-  box-shadow: var(--console-shadow-sm);
-  transition: all 0.2s ease;
-}
-.bot-select select:hover {
-  border-color: #a9d9d0;
-  box-shadow: var(--console-shadow);
-}
-.bot-select select:focus {
-  border-color: var(--console-brand);
-  box-shadow: 0 0 0 3px rgba(79, 184, 168, 0.14), var(--console-shadow);
-}
-.bot-select-chevron {
-  position: absolute; right: 13px; color: #70828b; font-style: normal;
-  line-height: 1; pointer-events: none;
-}
-.music section { margin-top: 32px; }
-.music section h2 { margin: 0 0 16px; font-size: 17px; font-weight: 700; }
-.music article {
-  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
-  border-radius: var(--console-radius);
-  background: var(--console-surface);
-  box-shadow: var(--console-shadow-sm);
-  transition: all 0.3s var(--console-ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .music article:hover {
-    background: var(--console-surface);
-    box-shadow: var(--console-shadow-hover);
-    transform: translateY(-4px);
-  }
-}
-.music article img, .music article i {
-  width: 56px; height: 56px; border-radius: var(--console-radius-sm); object-fit: cover;
-  background: var(--console-brand-soft); display: grid; place-items: center; font-style: normal; color: var(--console-brand-dark);
-  box-shadow: var(--console-shadow-sm);
-}
-.music article div { flex: 1; min-width: 0; }
-.music b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; }
-.music button {
-  height: 38px; border: 0; border-radius: var(--console-radius-sm); background: var(--console-brand);
-  color: #fff; padding: 0 16px; cursor: pointer; font-weight: 600; font-size: 14px;
-  box-shadow: var(--console-shadow-sm);
-  transition: all 0.2s ease;
-}
-.music button:hover:not(:disabled) {
-  background: var(--console-brand-dark);
-  box-shadow: var(--console-shadow);
-  transform: translateY(-1px);
-}
-.music button:disabled { opacity: .62; cursor: wait; }
-.error { color: var(--console-danger); margin-top: 12px; }
-@media (max-width: 760px) {
-  .music { padding: 24px 16px 36px; }
-  .music header h1 { font-size: 24px; }
-  .bot-select { display: flex; align-items: stretch; flex-direction: column; gap: 8px; margin-top: 16px; }
-  .bot-select-control { width: 100%; min-width: 0; }
-  .bot-select select { width: 100%; height: 46px; }
-  .music article { padding: 12px 8px; }
-  .music button { height: 40px; min-width: 64px; }
+@media (max-width: 560px) {
+  .music { padding: 28px 16px 34px; }
+  .music-heading h1 { font-size: 30px; }
+  .music-heading > div > span { font-size: 13px; }
+  .bot-select { align-items: stretch; flex-direction: column; gap: 8px; }
+  .track-row { gap: 10px; min-height: 68px; }
+  .track-index { display: none; }
+  .track-row img, .track-row .cover-placeholder { width: 46px; height: 46px; flex-basis: 46px; }
+  .row-action { min-width: 34px; width: 34px; padding: 0; }
+  .row-action span { display: none; }
+  .recent-card, .recent-cover { width: 142px; flex-basis: 142px; }
+  .recent-cover { height: 142px; }
+  .recent-cover button { opacity: 1; transform: none; }
 }
 </style>

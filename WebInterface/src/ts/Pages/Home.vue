@@ -96,52 +96,25 @@ export default Vue.extend({
 });
 </script>
 <style scoped lang="less">
-.login-page {
-  min-height: 100vh; display: grid; place-items: center; padding: 28px;
-  background: linear-gradient(145deg, #eff8f6 0%, #f7f9fb 48%, #eaf3f4 100%);
-}
-.login-panel {
-  width: 100%; max-width: 460px; padding: 36px;
-  background: rgba(255, 255, 255, 0.96); border: 1px solid var(--console-line);
-  border-radius: var(--console-radius-lg); box-shadow: var(--console-shadow-md);
-}
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 28px; background: var(--console-bg); }
+.login-panel { width: 100%; max-width: 440px; padding: 42px; background: var(--console-surface); border: 1px solid var(--console-line); border-radius: 20px; box-shadow: var(--console-shadow-md); }
 .brand { display: flex; align-items: center; gap: 12px; }
-.brand > span {
-  width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--console-radius);
-  background: var(--console-brand); color: #fff; font-size: 22px;
-  box-shadow: 0 8px 18px rgba(79, 184, 168, 0.28);
-}
+.brand > span { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: var(--console-brand); color: #fff; font-size: 22px; }
 .brand strong, .brand small { display: block; }
-.brand strong { font-size: 18px; }
+.brand strong { color: var(--console-ink); font-size: 18px; }
 .brand small { margin-top: 3px; color: var(--console-muted); font-size: 12px; }
-.heading { margin-top: 36px; }
-.heading p { margin: 0; color: var(--console-brand-dark); font-size: 13px; font-weight: 700; }
-.heading h1 { margin: 8px 0 10px; font-size: 28px; letter-spacing: -0.02em; }
+.heading { margin-top: 48px; }
+.heading p { margin: 0; color: var(--console-brand); font-size: 13px; font-weight: 700; }
+.heading h1 { margin: 8px 0 10px; color: var(--console-ink); font-size: 30px; letter-spacing: -.025em; }
 .heading span { color: var(--console-muted); line-height: 1.65; font-size: 14px; }
-label { display: block; margin-top: 18px; color: #536170; font-size: 13px; font-weight: 700; }
-label small { color: #8b97a2; font-weight: 400; }
-input {
-  width: 100%; height: 48px; margin-top: 8px; padding: 0 14px; border: 1px solid #dce3e6;
-  border-radius: var(--console-radius-sm); outline: 0; background: #fff; color: var(--console-ink); font: inherit;
-}
-input:focus { border-color: var(--console-brand); box-shadow: 0 0 0 3px rgba(79, 184, 168, 0.14); }
-.submit {
-  width: 100%; height: 50px; display: flex; align-items: center; justify-content: center; gap: 8px;
-  margin-top: 28px; border: 0; border-radius: var(--console-radius-sm); background: var(--console-brand);
-  color: #fff; font: inherit; font-weight: 700; cursor: pointer;
-  box-shadow: 0 8px 18px rgba(79, 184, 168, 0.24);
-}
+label { display: block; margin-top: 20px; color: var(--console-ink); font-size: 13px; font-weight: 600; }
+label small { color: var(--console-muted); font-weight: 400; }
+input { width: 100%; height: 48px; margin-top: 8px; padding: 0 14px; border: 1px solid var(--console-line-strong); border-radius: 10px; outline: 0; background: var(--console-surface-2); color: var(--console-ink); font: inherit; }
+input:focus { border-color: var(--console-brand); box-shadow: 0 0 0 3px var(--console-brand-soft); }
+.submit { width: 100%; height: 50px; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 30px; border: 0; border-radius: 10px; background: var(--console-brand); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.submit:hover:not(:disabled) { background: var(--console-brand-dark); }
 .submit i { font-style: normal; font-size: 18px; }
-.submit:disabled { opacity: .68; cursor: wait; box-shadow: none; }
-.error {
-  margin: 16px 0 -8px; padding: 12px; border-radius: var(--console-radius-sm);
-  background: var(--console-danger-soft); color: #bb555d; font-size: 13px;
-}
-@media (max-width: 520px) {
-  .login-page { padding: 16px; align-items: flex-start; padding-top: 10vh; }
-  .login-panel { padding: 28px 22px; border-radius: var(--console-radius); }
-  .heading { margin-top: 28px; }
-  .heading h1 { font-size: 24px; }
-  input, .submit { height: 50px; }
-}
+.submit:disabled { opacity: .68; cursor: wait; }
+.error { margin: 16px 0 -8px; padding: 12px; border-radius: 10px; background: var(--console-danger-soft); color: var(--console-danger); font-size: 13px; }
+@media (max-width: 520px) { .login-page { padding: 16px; align-items: start; padding-top: 10vh; } .login-panel { padding: 30px 22px; border-radius: 16px; } .heading { margin-top: 34px; } .heading h1 { font-size: 26px; } input, .submit { height: 50px; } }
 </style>

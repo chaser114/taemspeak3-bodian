@@ -313,12 +313,12 @@ button { border: 0; background: transparent; cursor: pointer; }
 .controls button:disabled { opacity: .5; cursor: wait; }
 .controls .play-button {
   width: 56px; height: 56px; background: var(--console-brand); color: #fff; font-size: 20px;
-  box-shadow: 0 4px 12px rgba(79, 184, 168, 0.3);
+  box-shadow: none;
 }
 .controls .play-button:hover:not(:disabled) {
   background: var(--console-brand-dark);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(79, 184, 168, 0.35);
+  box-shadow: none;
   transform: translateY(-1px);
 }
 .timeline { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 140px; }
@@ -456,5 +456,88 @@ button { border: 0; background: transparent; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .player-bar, .track-summary img, .cover-placeholder, .controls button, .queue-button, .back-button, .progress-track i, .lyrics-line { transition: none; }
   .lyrics-scroll { scroll-behavior: auto; }
+}
+
+/* Apple Music style overrides: the compact player floats above content; lyrics become a dedicated surface. */
+.player-bar {
+  left: calc(240px + 28px); right: 28px; bottom: 20px; height: 76px; padding: 10px 18px;
+  gap: 16px; border: 1px solid var(--console-line); border-radius: var(--console-radius-full);
+  background: var(--console-glass); box-shadow: var(--console-shadow); backdrop-filter: blur(24px) saturate(150%);
+}
+.track-summary { min-width: 190px; max-width: 28%; }
+.track-summary img, .cover-placeholder { width: 56px; height: 56px; flex-basis: 56px; border-radius: 10px; background: var(--console-surface-3); color: var(--console-brand); box-shadow: none; }
+.track-copy b { color: var(--console-ink); font-size: 13px; }
+.track-copy small { color: var(--console-muted); }
+.controls button, .mode-button, .queue-button { color: var(--console-muted); }
+.controls button:hover:not(:disabled), .mode-button:hover:not(:disabled), .queue-button:hover { background: var(--console-hover); color: var(--console-ink); transform: none; }
+.controls .play-button { width: 46px; height: 46px; background: var(--console-brand); box-shadow: none; }
+.controls .play-button:hover:not(:disabled) { background: var(--console-brand-dark); box-shadow: none; transform: none; }
+.progress-track { height: 4px; background: var(--console-surface-3); }
+.volume input[type="range"] { background: var(--console-surface-3); }
+.queue-button em { background: var(--console-brand); }
+
+.player-bar.expanded {
+  left: 0; right: 0; bottom: 0; height: 100vh; height: 100dvh; padding: 56px 7vw 36px;
+  display: grid; grid-template-columns: minmax(270px, .38fr) minmax(0, .62fr); grid-template-rows: auto 1fr auto auto auto;
+  align-items: center; column-gap: 7vw; row-gap: 18px; border: 0; border-radius: 0; background: var(--console-bg); box-shadow: none; backdrop-filter: none;
+}
+.expanded .track-summary { grid-column: 1; grid-row: 1 / span 2; width: 100%; max-width: 360px; align-self: center; display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
+.expanded .track-summary img, .expanded .cover-placeholder { width: 31vw; max-width: 360px; height: 31vw; max-height: 360px; flex-basis: auto; border-radius: 14px; background: var(--console-surface-2); }
+.expanded .track-copy b { font-size: 21px; }
+.expanded .track-copy small { margin-top: 6px; font-size: 13px; }
+.expanded .lyrics-panel { grid-column: 2; grid-row: 1 / span 5; width: 100%; max-width: none; height: 100%; margin: 0; border: 0; border-left: 1px solid var(--console-line); border-radius: 0; background: transparent; }
+.expanded .lyrics-scroll { padding: 28vh 4vw 26vh; }
+.lyrics-line { text-align: left; color: var(--console-muted); font-size: 20px; line-height: 1.5; }
+.lyrics-line.active { color: var(--console-ink); font-size: 28px; transform: none; }
+.expanded .controls { grid-column: 1; grid-row: 3; justify-content: flex-start; }
+.expanded .timeline { grid-column: 1; grid-row: 4; width: 100%; max-width: 360px; }
+.expanded .mode-volume { grid-column: 1; grid-row: 5; width: 100%; max-width: 360px; justify-content: flex-start; }
+.expanded .queue-button { grid-column: 1; grid-row: 5; justify-self: end; align-self: center; }
+.back-button { top: 18px; left: 28px; color: var(--console-muted); }
+.back-button:hover { color: var(--console-ink); }
+
+@media (max-width: 1023px) {
+  .player-bar { left: 12px; right: 12px; bottom: calc(var(--console-nav-h) + env(safe-area-inset-bottom) + 10px); height: 78px; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 1fr auto; grid-template-areas: "summary controls" "modes queue"; gap: 4px 8px; align-items: center; padding: 9px 12px; border-radius: 20px; }
+  .track-summary { grid-area: summary; min-width: 0; max-width: none; width: auto; }
+  .track-summary img, .cover-placeholder { width: 48px; height: 48px; flex-basis: 48px; }
+  .controls { grid-area: controls; gap: 2px; justify-self: end; }
+  .timeline { display: block; position: absolute; left: 0; right: 0; top: 0; height: 2px; min-width: 0; padding: 0; margin: 0; pointer-events: none; }
+  .timeline small { display: none; }
+  .progress-track { height: 2px; border-radius: 0; }
+  .mode-volume { grid-area: modes; gap: 4px; min-width: 0; }
+  .queue-button { grid-area: queue; width: 36px; height: 36px; justify-self: end; }
+  .player-bar.expanded { left: 0; right: 0; bottom: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column; gap: 10px; padding: calc(54px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom)); border-radius: 0; }
+  .expanded .track-summary { width: 100%; max-width: 430px; flex-direction: row; align-items: center; gap: 14px; }
+  .expanded .track-summary img, .expanded .cover-placeholder { width: 62px; height: 62px; flex-basis: 62px; border-radius: 10px; }
+  .expanded .lyrics-panel { width: 100%; max-width: 430px; flex: 1; min-height: 0; border: 0; }
+  .expanded .lyrics-scroll { padding: 18vh 2px 20vh; }
+  .lyrics-line { text-align: left; font-size: 17px; margin-bottom: 16px; }
+  .lyrics-line.active { font-size: 22px; }
+  .expanded .controls, .expanded .timeline, .expanded .mode-volume { width: 100%; max-width: 430px; flex: none; }
+  .expanded .controls { justify-content: center; }
+  .expanded .timeline { display: flex; }
+  .expanded .mode-volume { justify-content: center; }
+  .expanded .queue-button { position: absolute; right: 18px; bottom: calc(14px + env(safe-area-inset-bottom)); }
+  .back-button { top: calc(10px + env(safe-area-inset-top)); left: 10px; }
+}
+
+@media (max-width: 560px) {
+  .player-bar:not(.expanded) { display: grid; overflow: hidden; grid-template-columns: minmax(0, 1fr) 108px; grid-template-rows: 43px 25px; grid-template-areas: "summary controls" "modes queue"; }
+  .player-bar:not(.expanded) .track-summary { position: static; grid-area: summary; min-width: 0; width: 100%; max-width: none; }
+  .player-bar:not(.expanded) .controls { position: absolute !important; top: 9px; right: 6px; grid-area: auto; display: flex !important; width: 108px !important; min-width: 108px !important; height: 43px; justify-self: auto; justify-content: space-between; z-index: 2; }
+  .player-bar:not(.expanded) .controls button { position: static !important; width: 30px !important; min-width: 30px !important; height: 36px !important; padding: 0; flex: 0 0 30px; }
+  .player-bar:not(.expanded) .controls .play-button { width: 40px !important; min-width: 40px !important; height: 40px !important; flex-basis: 40px; }
+  .player-bar:not(.expanded) .mode-volume { position: static; grid-area: modes; min-width: 0; width: 100%; max-width: none; display: flex; }
+  .player-bar:not(.expanded) .queue-button { position: static; grid-area: queue; width: 36px; min-width: 36px; height: 36px; justify-self: end; }
+}
+
+@media (max-width: 560px) {
+  .player-bar { left: 8px; right: 8px; bottom: calc(var(--console-nav-h) + env(safe-area-inset-bottom) + 8px); }
+  .track-copy b { max-width: 145px; }
+  .controls { gap: 0; }
+  .controls button { width: 32px; height: 32px; }
+  .controls .play-button { width: 40px; height: 40px; }
+  .mode-volume { gap: 2px; }
+  .volume input[type="range"] { width: 64px; }
 }
 </style>

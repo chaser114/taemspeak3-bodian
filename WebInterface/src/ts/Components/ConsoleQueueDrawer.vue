@@ -52,59 +52,35 @@ export default Vue.extend({
 </script>
 
 <style scoped lang="less">
-.drawer-wrap { position: fixed; z-index: 8; inset: 0; }
-.shade { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(31, 43, 54, .18); cursor: pointer; }
-.drawer {
-  position: absolute; top: 76px; right: 0; bottom: 92px; width: 92vw; max-width: 400px;
-  display: flex; flex-direction: column; background: var(--console-surface);
-  border-left: 1px solid var(--console-line);
-  box-shadow: -8px 0 32px rgba(27, 41, 54, 0.12);
-  backdrop-filter: blur(10px);
-}
-header { display: flex; justify-content: space-between; align-items: center; padding: 22px 20px 16px; border-bottom: 1px solid var(--console-line); }
+.drawer-wrap { position: fixed; z-index: 12; inset: 0; }
+.shade { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(0, 0, 0, .42); cursor: pointer; }
+.drawer { position: absolute; inset: 0 0 0 auto; width: 420px; max-width: 92vw; display: flex; flex-direction: column; background: var(--console-surface); color: var(--console-ink); border-left: 1px solid var(--console-line); box-shadow: -18px 0 50px rgba(0, 0, 0, .22); backdrop-filter: blur(24px) saturate(140%); }
+header { display: flex; justify-content: space-between; align-items: center; padding: 28px 24px 20px; border-bottom: 1px solid var(--console-line); }
 header span, header small { display: block; }
-header span { font-size: 17px; font-weight: 700; }
-header small { margin-top: 4px; color: #8693a0; font-size: 12px; }
-header button {
-  width: 38px; height: 38px; min-width: 38px; min-height: 38px; display: grid; place-items: center; padding: 0; border: 0;
-  border-radius: 50%; background: #f0f4f4; color: #687684; cursor: pointer; line-height: 1;
-}
+header span { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+header small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
+header button { width: 38px; height: 38px; min-width: 38px; min-height: 38px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--console-surface-2); color: var(--console-muted); cursor: pointer; line-height: 1; }
+header button:hover { background: var(--console-hover); color: var(--console-ink); }
 .items { flex: 1; overflow: auto; padding: 10px; }
-.items article {
-  display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 12px;
-  border-radius: var(--console-radius-sm); outline: 0;
-  transition: all 0.2s ease;
-}
+.items article { display: flex; align-items: center; gap: 12px; min-height: 68px; padding: 10px 12px; border-radius: var(--console-radius-sm); outline: 0; transition: background-color 160ms ease, transform 160ms ease; }
 .items article.selectable { cursor: pointer; }
-.items article.selectable:hover, .items article.selectable:focus-visible {
-  background: var(--console-brand-soft);
-  transform: translateX(-2px);
-}
-.items article.active {
-  background: linear-gradient(135deg, #e9f6f3 0%, #f0faf8 100%);
-  border-left: 3px solid var(--console-brand);
-  padding-left: 9px;
-  color: var(--console-brand-dark);
-  font-weight: 600;
-  box-shadow: var(--console-shadow-sm);
-}
-.items i { width: 26px; color: #9aa5af; font-style: normal; font-size: 12px; }
+.items article.selectable:hover, .items article.selectable:focus-visible { background: var(--console-hover); transform: translateX(-2px); }
+.items article.active { background: var(--console-brand-soft); border-left: 3px solid var(--console-brand); padding-left: 9px; color: var(--console-brand); font-weight: 600; }
+.items i { width: 26px; color: var(--console-muted-2); font-style: normal; font-size: 12px; }
 .items div { min-width: 0; flex: 1; }
 .items strong, .items small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .items strong { font-size: 14px; }
-.items small { margin-top: 4px; color: #8b97a3; font-size: 12px; }
-.items p { text-align: center; color: #8b97a3; font-size: 14px; }
-footer { padding: 14px; border-top: 1px solid var(--console-line); }
-footer button { width: 100%; height: 40px; border: 1px solid #efc5c7; border-radius: 8px; background: #fff5f5; color: var(--console-danger); font: inherit; cursor: pointer; }
-.drawer-enter-active, .drawer-leave-active { transition: opacity .2s; }
-.drawer-enter-active .drawer, .drawer-leave-active .drawer { transition: transform .25s ease; }
+.items small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
+.items p { text-align: center; color: var(--console-muted); font-size: 14px; }
+footer { padding: 16px 20px; border-top: 1px solid var(--console-line); }
+footer button { width: 100%; height: 42px; border: 1px solid var(--console-danger-soft); border-radius: 10px; background: var(--console-danger-soft); color: var(--console-danger); font: inherit; cursor: pointer; font-weight: 600; }
+footer button:hover { background: var(--console-brand); color: #fff; }
+.drawer-enter-active, .drawer-leave-active { transition: opacity 180ms ease; }
+.drawer-enter-active .drawer, .drawer-leave-active .drawer { transition: transform 240ms var(--console-ease-drawer); }
 .drawer-enter, .drawer-leave-to { opacity: 0; }
 .drawer-enter .drawer, .drawer-leave-to .drawer { transform: translateX(100%); }
 @media (max-width: 760px) {
-  .drawer {
-    top: auto; bottom: calc(var(--console-nav-h) + env(safe-area-inset-bottom)); width: 100%; max-width: none;
-    height: 70vh; height: 70dvh; max-height: 540px; border: 0; border-radius: 16px 16px 0 0;
-  }
+  .drawer { inset: auto 0 calc(var(--console-nav-h) + env(safe-area-inset-bottom)) 0; width: 100%; height: 76vh; height: 76dvh; max-height: 620px; border: 0; border-radius: 22px 22px 0 0; }
   .drawer-enter .drawer, .drawer-leave-to .drawer { transform: translateY(100%); }
 }
 </style>
