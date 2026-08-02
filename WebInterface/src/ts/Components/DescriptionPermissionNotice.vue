@@ -170,7 +170,7 @@ footer button:disabled {
   color: #4c5d69;
 }
 .primary {
-  background: #4fb8a8;
+  background: var(--console-brand);
   color: #fff;
 }
 </style>

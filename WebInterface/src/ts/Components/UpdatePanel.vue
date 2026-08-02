@@ -162,15 +162,17 @@ export default Vue.extend({
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(25, 37, 48, 0.38);
+  background: rgba(0, 0, 0, .52);
 }
 .update-panel {
   width: 100%;
   max-width: 460px;
   padding: 24px;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 18px 54px rgba(20, 35, 45, 0.22);
+  border: 1px solid var(--console-line);
+  border-radius: var(--console-radius-lg);
+  background: var(--console-surface);
+  color: var(--console-ink);
+  box-shadow: var(--console-shadow-md);
 }
 header {
   display: flex;
@@ -180,7 +182,7 @@ header {
 }
 header p {
   margin: 0;
-  color: #287f74;
+  color: var(--console-brand);
   font-size: 13px;
   font-weight: 700;
 }
@@ -193,8 +195,8 @@ header h2 {
   height: 34px;
   border: 0;
   border-radius: 50%;
-  background: #edf1f2;
-  color: #53616e;
+  background: var(--console-surface-2);
+  color: var(--console-muted);
   font-size: 24px;
   line-height: 1;
   cursor: pointer;
@@ -207,12 +209,12 @@ header h2 {
 }
 .meta div {
   padding: 12px;
-  border-radius: 8px;
-  background: #f5f8f8;
+  border-radius: var(--console-radius-xs);
+  background: var(--console-surface-2);
 }
 .meta span {
   display: block;
-  color: #778595;
+  color: var(--console-muted);
   font-size: 12px;
 }
 .meta b {
@@ -227,13 +229,13 @@ header h2 {
   margin: 16px 0 0;
   max-height: 120px;
   overflow: auto;
-  color: #4c5d69;
+  color: var(--console-muted);
   font-size: 13px;
   line-height: 1.55;
   white-space: pre-wrap;
 }
 .notes.muted {
-  color: #8b97a3;
+  color: var(--console-muted-2);
 }
 .sources {
   display: grid;
@@ -247,9 +249,9 @@ header h2 {
   gap: 4px;
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #d9e7e4;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--console-line-strong);
+  border-radius: var(--console-radius-xs);
+  background: var(--console-surface);
   color: var(--console-ink);
   text-align: left;
   cursor: pointer;
@@ -259,13 +261,13 @@ header h2 {
   font-size: 14px;
 }
 .source small {
-  color: #778595;
+  color: var(--console-muted);
   font-size: 12px;
 }
 .source.active {
-  border-color: #4fb8a8;
-  background: #edf7f5;
-  box-shadow: 0 0 0 2px rgba(79, 184, 168, 0.14);
+  border-color: var(--console-brand);
+  background: var(--console-brand-soft);
+  box-shadow: 0 0 0 2px var(--console-brand-soft);
 }
 .source.unavailable {
   opacity: 0.55;
@@ -274,7 +276,7 @@ header h2 {
 .password {
   display: block;
   margin-top: 16px;
-  color: #44515e;
+  color: var(--console-ink);
   font-size: 13px;
 }
 .password input {
@@ -282,18 +284,20 @@ header h2 {
   height: 42px;
   margin-top: 6px;
   padding: 0 12px;
-  border: 1px solid #d5e0e3;
-  border-radius: 8px;
+  border: 1px solid var(--console-line-strong);
+  border-radius: var(--console-radius-xs);
+  background: var(--console-surface-2);
+  color: var(--console-ink);
   font: inherit;
 }
 .error {
   margin: 12px 0 0;
-  color: #b34d57;
+  color: var(--console-danger);
   font-size: 13px;
 }
 .message {
   margin: 12px 0 0;
-  color: #197565;
+  color: #30a94c;
   font-size: 13px;
 }
 footer {
@@ -315,11 +319,11 @@ footer button:disabled {
   cursor: wait;
 }
 .secondary {
-  background: #edf1f2;
-  color: #4c5d69;
+  background: var(--console-surface-2);
+  color: var(--console-muted);
 }
 .primary {
-  background: #4fb8a8;
+  background: var(--console-brand);
   color: #fff;
 }
 @media (max-width: 520px) {

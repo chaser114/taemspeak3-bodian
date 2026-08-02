@@ -91,10 +91,10 @@
 
       <section class="accounts-card">
         <div class="section-heading">
-          <h2>网页账号</h2>
-          <button type="button" class="text-button" @click="openOwnPassword">修改我的密码</button>
+          <h2>网页账号管理</h2>
+          <span>{{ accounts.length }} 个账号</span>
         </div>
-        <p class="empty">密码至少 8 位。创建成功后会显示在下方列表。</p>
+        <p class="account-intro">创建和管理可以登录网页控制台的账号。</p>
         <p v-if="accountError" class="inline-error">{{ accountError }}</p>
         <p v-if="accountSuccess" class="inline-success">{{ accountSuccess }}</p>
         <form class="create-account" @submit.prevent="createAccount">
@@ -108,14 +108,19 @@
           </label>
           <button type="submit" :disabled="accountBusy">{{ accountBusy ? '创建中…' : '创建账号' }}</button>
         </form>
-        <article v-for="account in accounts" :key="account.username">
-          <div>
+        <article v-for="account in accounts" :key="account.username" class="account-item">
+          <span class="account-avatar">{{ account.username.slice(0, 1).toUpperCase() }}</span>
+          <div class="account-info">
             <b>{{ account.username }}</b>
             <small>{{ account.role === 'admin' ? '管理员' : '普通用户' }}{{ account.enabled ? '' : ' · 已停用' }}</small>
           </div>
-          <button type="button" class="text-button" @click="openResetPassword(account)">改密</button>
-          <button type="button" class="text-button" @click="toggle(account)">{{ account.enabled ? '已启用' : '已停用' }}</button>
+          <span :class="['account-status', { enabled: account.enabled }]">{{ account.enabled ? '已启用' : '已停用' }}</span>
+          <button type="button" class="text-button" @click="account.username === meUsername ? openOwnPassword() : openResetPassword(account)">
+            {{ account.username === meUsername ? '修改我的密码' : '修改密码' }}
+          </button>
+          <button type="button" :class="['text-button', { delete: account.enabled }]" @click="toggle(account)">{{ account.enabled ? '停用' : '启用' }}</button>
         </article>
+        <div class="account-self"><span>当前账号：{{ meUsername || '管理员' }}</span><button type="button" class="text-button" @click="openOwnPassword">修改我的密码</button></div>
       </section>
     </div>
 
@@ -514,7 +519,7 @@ export default Vue.extend({
 .service-actions button:disabled { opacity: .6; cursor: wait; }
 .service-actions .secondary { background: #edf1f2; color: #4c5d69; }
 .service-actions .danger { background: var(--console-danger-soft); color: var(--console-danger); }
-.service-message { margin: 12px 0 0; color: #197565; font-size: 13px; }
+.service-message { margin: 12px 0 0; color: #30a94c; font-size: 13px; }
 .log-view {
   margin: 12px 0 0; max-height: 220px; overflow: auto; padding: 12px 14px;
   border-radius: var(--console-radius-sm); background: #101820; color: #d7e2ea; font-size: 12px; line-height: 1.5;
@@ -563,7 +568,7 @@ article small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
 .status {
   padding: 4px 8px; border-radius: 999px; background: #f1f3f5; color: #788595; font-size: 12px; white-space: nowrap;
 }
-.status.connected { background: var(--console-brand-soft); color: #197565; }
+.status.connected { background: var(--console-brand-soft); color: #30a94c; }
 .status.connecting { background: var(--console-warn-soft); color: #9b6b10; }
 .text-button {
   min-width: 52px; height: 36px; flex: 0 0 auto; white-space: nowrap;
@@ -576,8 +581,15 @@ article small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
 .create-account label { margin-top: 0; }
 .create-account button { margin-top: 0; min-width: 104px; height: 44px; }
 .create-account button:disabled { opacity: .65; cursor: wait; }
+.account-intro { margin: 6px 0 0; color: var(--console-muted); font-size: 13px; line-height: 1.55; }
+.account-item { gap: 12px; }
+.account-avatar { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: var(--console-brand-soft); color: var(--console-brand); font-size: 13px; font-weight: 800; }
+.account-info { min-width: 0; flex: 1; }
+.account-status { padding: 4px 9px; border-radius: 999px; background: var(--console-surface-2); color: var(--console-muted); font-size: 12px; white-space: nowrap; }
+.account-status.enabled { background: rgba(48, 209, 88, .14); color: #30a94c; }
+.account-self { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--console-line); color: var(--console-muted); font-size: 13px; }
 .inline-error { margin: 10px 0 0; color: var(--console-danger); font-size: 13px; }
-.inline-success { margin: 10px 0 0; color: #197565; font-size: 13px; }
+.inline-success { margin: 10px 0 0; color: #30a94c; font-size: 13px; }
 .error { margin-top: 16px; color: var(--console-danger); }
 .modal-mask {
   position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px;
@@ -614,6 +626,11 @@ article small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
   .status { margin-left: auto; }
   .section-heading { flex-wrap: wrap; }
   .section-heading .text-button { width: 100%; }
+  .account-item { align-items: center !important; }
+  .account-status { margin-left: 0; }
+  .account-item .text-button { width: auto; min-width: 0; padding: 0 9px; }
+  .account-self { align-items: stretch; flex-direction: column; }
+  .account-self .text-button { width: 100%; }
 }
 
 /* Shared black / white / red admin surface. */

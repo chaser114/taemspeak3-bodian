@@ -6,7 +6,7 @@
       <p>请先在管理页面完成 TeamSpeak 连接。</p>
     </section>
     <template v-else>
-      <header class="music-heading">
+      <header v-if="!recentOnly" class="music-heading">
         <div>
           <p class="eyebrow">{{ recentOnly ? '播放记录' : '点歌' }}</p>
           <h1>{{ recentOnly ? '最近播放' : '想听什么？' }}</h1>
@@ -39,7 +39,7 @@
         </div>
       </section>
 
-      <section v-if="recentOnly || !results.length" class="recent-section">
+      <section v-if="!recentOnly && !results.length" class="recent-section">
         <div class="section-title"><h2>最近播放</h2><router-link v-if="!recentOnly && state.recent.length" to="/recent">查看全部</router-link></div>
         <div v-if="state.recent.length" class="recent-strip">
           <article v-for="track in state.recent" :key="track.resource.resid + track.type" class="recent-card" @click="play(track.resource)">
@@ -48,6 +48,30 @@
           </article>
         </div>
         <p v-else class="empty-copy">还没有播放记录。</p>
+      </section>
+
+      <section v-if="recentOnly" class="recent-page">
+        <header class="recent-page-head">
+          <div>
+            <p class="eyebrow">播放记录</p>
+            <h1>最近播放</h1>
+            <span>{{ state.recent.length }} 首歌曲</span>
+          </div>
+          <span v-if="state.recent.length" class="clear-history">播放记录由机器人历史模块维护</span>
+        </header>
+        <div v-if="state.recent.length" class="recent-list">
+          <div class="day-group">
+            <div class="day-label">最近</div>
+            <article v-for="(track, index) in state.recent" :key="track.resource.resid + track.type + index" class="song-row">
+              <button type="button" class="row-play" title="播放" aria-label="播放" :disabled="busy" @click="play(track.resource)"><b-icon icon="play" size="is-small" /></button>
+              <span class="scover"><img v-if="track.coverUrl" :src="track.coverUrl" :alt="track.title"><b-icon v-else icon="music-note" /></span>
+              <span class="song-info"><b>{{ track.title }}</b><small>{{ track.type || '歌曲' }}</small></span>
+              <span class="dur">{{ duration(track) }}</span>
+              <button type="button" class="row-add" title="加入待播" aria-label="加入待播" :disabled="busy" @click="add(track.resource)"><b-icon icon="playlist-plus" size="is-small" /></button>
+            </article>
+          </div>
+        </div>
+        <p v-else class="empty-copy recent-empty">还没有播放记录。</p>
       </section>
 
       <ConsolePlayerBar
@@ -203,6 +227,10 @@ export default Vue.extend({
       this.queueOpen = false;
       return this.call("music/clear");
     },
+    duration(track: any) {
+      const value = track.resource && track.resource.add && (track.resource.add.duration || track.resource.add.length);
+      return value ? String(value) : "--:--";
+    },
     setVolume(volume: number) {
       const value = Math.max(0, Math.min(100, Number(volume) || 0));
       return this.call("music/volume", { volume: value, botId: this.botId }, () => {
@@ -283,6 +311,27 @@ export default Vue.extend({
 .empty-state h1 { margin: 18px 0 6px; font-size: 24px; }
 .empty-state p, .empty-copy { color: var(--console-muted); font-size: 14px; }
 .error { margin: 18px 0 0; color: var(--console-danger); font-size: 13px; }
+.recent-page { max-width: 1000px; margin: 0 auto; padding: 40px 34px 60px; }
+.recent-page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.recent-page-head h1 { margin: 0; color: var(--console-ink); font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
+.recent-page-head span { display: block; margin-top: 5px; color: var(--console-muted); font-size: 13px; }
+.clear-history { color: var(--console-muted); font-size: 13px; }
+.recent-list { margin-top: 22px; border-top: 1px solid var(--console-line); }
+.day-group { margin-top: 22px; }
+.day-label { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: var(--console-muted); font-size: 13px; font-weight: 700; }
+.day-label::after { content: ""; flex: 1; height: 1px; background: var(--console-line); }
+.song-row { display: flex; align-items: center; gap: 14px; height: 64px; padding: 0 10px; border-bottom: 1px solid var(--console-line); border-radius: 12px; }
+.song-row:hover { background: var(--console-hover); }
+.row-play, .row-add { width: 36px; height: 36px; flex: 0 0 auto; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--console-ink); cursor: pointer; }
+.row-play:hover, .row-add:hover { background: var(--console-brand-soft); color: var(--console-brand); }
+.scover { width: 44px; height: 44px; flex: 0 0 auto; display: grid; place-items: center; overflow: hidden; border-radius: 9px; background: var(--console-surface-3); color: var(--console-muted); }
+.scover img { width: 100%; height: 100%; object-fit: cover; }
+.song-info { min-width: 0; flex: 1; }
+.song-info b, .song-info small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.song-info b { color: var(--console-ink); font-size: 14.5px; font-weight: 600; }
+.song-info small { margin-top: 3px; color: var(--console-muted); font-size: 12.5px; }
+.dur { width: 44px; color: var(--console-muted); font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: right; }
+.recent-empty { min-height: 36vh; display: grid; place-items: center; }
 @media (max-width: 1023px) {
   .music { padding: 34px 20px 38px; }
   .music-heading { display: block; }
@@ -290,6 +339,7 @@ export default Vue.extend({
   .bot-select { display: flex; align-items: center; margin-top: 26px; }
   .bot-select-control { flex: 1; min-width: 0; }
   .music section { margin-top: 38px; }
+  .recent-page { padding: 28px 20px 150px; }
 }
 @media (max-width: 560px) {
   .music { padding: 28px 16px 34px; }
@@ -304,5 +354,11 @@ export default Vue.extend({
   .recent-card, .recent-cover { width: 142px; flex-basis: 142px; }
   .recent-cover { height: 142px; }
   .recent-cover button { opacity: 1; transform: none; }
+  .recent-page { padding: 24px 16px 150px; }
+  .recent-page-head h1 { font-size: 24px; }
+  .song-row { gap: 10px; }
+  .row-play { width: 30px; }
+  .scover { width: 42px; height: 42px; }
+  .row-add { width: 30px; }
 }
 </style>
