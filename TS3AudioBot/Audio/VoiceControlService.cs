@@ -622,7 +622,7 @@ namespace TS3AudioBot.Audio
 				this.model = model;
 				commandTiming = new VoiceCommandTiming(CommandWindow);
 				WakeWord = wakeWord;
-				Decoder = OpusDecoder.Create(sampleRate, 1);
+				Decoder = OpusDecoder.Create(SampleRate, 1);
 				SpeechDetector = new SpeechActivityDetector();
 				SpeechDetector.SetHangoverFrames(SpeechActivityDetector.WakeHangoverFrames);
 			}
@@ -648,7 +648,7 @@ namespace TS3AudioBot.Audio
 				ResetCommand();
 				WakeWord = wakeWord;
 				wakeStability.Reset();
-				if (WakeRecognizer is not null)
+				if (WakeRecognizer != null)
 				{
 					WakeRecognizer.Dispose();
 					WakeRecognizer = CreateWakeRecognizer(sampleRate);
