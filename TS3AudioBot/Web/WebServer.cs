@@ -447,6 +447,19 @@ namespace TS3AudioBot.Web
 			if (path == "music/next" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.Next(account.Username, body.Value<string>("botId"))); return; }
 			if (path == "music/previous" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.Previous(account.Username, body.Value<string>("botId"))); return; }
 			if (path == "music/pause" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.TogglePause(body.Value<string>("botId"))); return; }
+			if (path == "music/seek" && ctx.Request.Method == "POST")
+			{
+				try
+				{
+					var body = await ReadJson(ctx);
+					var position = body.Value<double?>("position") ?? body.Value<double?>("seconds");
+					if (position is null) { await WriteError(ctx, "请提供播放位置。", StatusCodes.Status400BadRequest); return; }
+					await ExecuteMusic(ctx, () => console.Seek(position.Value, body.Value<string>("botId")));
+				}
+				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
+				catch (Exception ex) { Log.Warn(ex, "Console seek failed."); await WriteError(ctx, "调整播放进度失败。", StatusCodes.Status422UnprocessableEntity); }
+				return;
+			}
 			if (path == "music/clear" && ctx.Request.Method == "POST") { if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "只有管理员可以清空待播队列。", 403); return; } var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.Clear(body.Value<string>("botId"))); return; }
 			if (path == "music/volume" && ctx.Request.Method == "POST")
 			{

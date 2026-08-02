@@ -40,8 +40,11 @@
             <button type="button" :class="{ on: loopMode !== 'off' }" :title="loopTitle" :aria-label="loopTitle" :disabled="busy" @click="cycleLoop"><b-icon :icon="loopModeIcon" /></button>
           </div>
           <div class="np-progress">
-            <time>{{ time(livePosition) }}</time>
-            <div class="np-track"><i :style="{ width: (progressRatio * 100) + '%' }"></i></div>
+            <time>{{ time(displayPosition) }}</time>
+            <div class="np-track seek-track">
+              <i :style="{ width: (displayProgressRatio * 100) + '%' }"></i>
+              <input class="seek-input" type="range" min="0" step="0.1" :max="state.length || 0" :value="displayPosition" :disabled="!canSeek" aria-label="调整播放进度" @input="onSeekInput" @change="onSeekCommit">
+            </div>
             <time>{{ time(state.length || 0) }}</time>
           </div>
           <label class="np-volume" :title="'音量 ' + Math.round(localVolume)">
@@ -60,14 +63,22 @@
               :key="index + '-' + line.time"
               :class="['lyric-line', { active: index === activeLyricIndex, before: index < activeLyricIndex }]"
               :ref="'lyric-' + index"
+              :tabindex="canSeek ? 0 : undefined"
+              :role="canSeek ? 'button' : undefined"
+              @click="seekToLyric(line.time)"
+              @keydown.enter.prevent="seekToLyric(line.time)"
+              @keydown.space.prevent="seekToLyric(line.time)"
             >{{ line.text }}</p>
           </div>
         </section>
 
         <div class="np-bottom">
           <div class="np-progress">
-            <time>{{ time(livePosition) }}</time>
-            <div class="np-track"><i :style="{ width: (progressRatio * 100) + '%' }"></i></div>
+            <time>{{ time(displayPosition) }}</time>
+            <div class="np-track seek-track">
+              <i :style="{ width: (displayProgressRatio * 100) + '%' }"></i>
+              <input class="seek-input" type="range" min="0" step="0.1" :max="state.length || 0" :value="displayPosition" :disabled="!canSeek" aria-label="调整播放进度" @input="onSeekInput" @change="onSeekCommit">
+            </div>
             <time>{{ time(state.length || 0) }}</time>
           </div>
           <div class="np-controls" aria-label="播放控制">
@@ -99,7 +110,7 @@
         <button type="button" class="play-button" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')"><b-icon :icon="showPlayIcon ? 'play' : 'pause'" size="is-medium" /></button>
         <button type="button" title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')"><b-icon icon="skip-next" /></button>
       </div>
-      <div class="timeline"><div class="progress-track"><i :style="{ transform: 'scaleX(' + progressRatio + ')' }"></i></div><small>{{ time(livePosition) }} / {{ time(state.length || 0) }}</small></div>
+      <div class="timeline"><div class="progress-track seek-track"><i :style="{ transform: 'scaleX(' + displayProgressRatio + ')' }"></i><input class="seek-input" type="range" min="0" step="0.1" :max="state.length || 0" :value="displayPosition" :disabled="!canSeek" aria-label="调整播放进度" @input="onSeekInput" @change="onSeekCommit"></div><small>{{ time(displayPosition) }} / {{ time(state.length || 0) }}</small></div>
       <div class="mode-volume" aria-label="播放模式与音量">
         <button type="button" class="mode-button" :class="{ on: !!state.random }" title="随机播放" aria-label="随机播放" :disabled="busy" @click="toggleRandom"><b-icon icon="shuffle" size="is-small" /></button>
         <button type="button" class="mode-button" :class="{ on: loopMode !== 'off' }" :title="loopTitle" :aria-label="loopTitle" :disabled="busy" @click="cycleLoop"><b-icon :icon="loopModeIcon" size="is-small" /></button>
@@ -135,6 +146,7 @@ export default Vue.extend({
       lyricLines: [] as LyricLine[],
       lyricsLoading: false,
       lyricsTrackKey: "",
+      seekDraft: null as number | null,
       localVolume: 50,
       volumeTimer: 0 as any,
     };
@@ -161,6 +173,7 @@ export default Vue.extend({
         }
 
         if (trackChanged) {
+          this.seekDraft = null;
           this.renderedPosition = nextPosition;
           if (this.expanded) this.loadLyrics();
           else {
@@ -172,6 +185,9 @@ export default Vue.extend({
     },
     expanded(value: boolean) {
       if (value) this.loadLyrics();
+    },
+    busy(value: boolean) {
+      if (!value) this.seekDraft = null;
     },
     activeLyricIndex(index: number) {
       if (!this.expanded || index < 0) return;
@@ -192,17 +208,29 @@ export default Vue.extend({
       const state = this.state as MusicState;
       return state.length ? Math.min(1, Math.max(0, this.livePosition / state.length)) : 0;
     },
+    displayPosition(): number {
+      const state = this.state as MusicState;
+      if (this.seekDraft === null) return this.livePosition;
+      return state.length ? Math.min(state.length, Math.max(0, this.seekDraft)) : Math.max(0, this.seekDraft);
+    },
+    displayProgressRatio(): number {
+      const state = this.state as MusicState;
+      return state.length ? Math.min(1, Math.max(0, this.displayPosition / state.length)) : 0;
+    },
     trackTitle(): string {
       return this.state.current ? this.state.current.title : "等待点歌";
     },
     artistTitle(): string {
-      return this.state.current ? (this.state.current.type || "歌曲") : "暂无播放";
+      return this.state.current ? "歌曲" : "暂无播放";
     },
     currentTheme(): string {
       return document.documentElement.getAttribute("data-theme") || "light";
     },
     canControl(): boolean {
       return !this.busy && !!this.state.current;
+    },
+    canSeek(): boolean {
+      return this.canControl && !!this.state.length;
     },
     canSkip(): boolean {
       if (this.busy) return false;
@@ -312,6 +340,26 @@ export default Vue.extend({
       }
       this.$emit("volume", value);
     },
+    onSeekInput(event: Event) {
+      const value = Number((event.target as HTMLInputElement).value);
+      if (!Number.isFinite(value)) return;
+      const length = Number(this.state.length) || 0;
+      this.seekDraft = Math.max(0, length ? Math.min(length, value) : value);
+    },
+    onSeekCommit(event: Event) {
+      const value = Number((event.target as HTMLInputElement).value);
+      if (!Number.isFinite(value)) return;
+      const length = Number(this.state.length) || 0;
+      if (!this.canSeek || !length) return;
+      this.seekDraft = Math.max(0, Math.min(length, value));
+      this.$emit("seek", this.seekDraft);
+    },
+    seekToLyric(position: number) {
+      if (!this.canSeek || !Number.isFinite(position)) return;
+      const length = Number(this.state.length) || 0;
+      this.seekDraft = Math.max(0, Math.min(length, position));
+      this.$emit("seek", this.seekDraft);
+    },
     cycleLoop() {
       const order = ["off", "all", "one"];
       const current = this.loopMode;
@@ -349,6 +397,10 @@ button:disabled { opacity: .45; cursor: wait; }
 .timeline { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 140px; }
 .progress-track { height: 4px; flex: 1; overflow: hidden; border-radius: 999px; background: var(--console-surface-3); }
 .progress-track i { display: block; width: 100%; height: 100%; background: var(--console-brand); transform-origin: left center; }
+.seek-track { position: relative; overflow: visible; }
+.seek-track i { pointer-events: none; }
+.seek-input { position: absolute; z-index: 1; inset: -9px 0; width: auto; height: 22px; margin: 0; opacity: 0; cursor: pointer; }
+.seek-input:disabled { cursor: default; }
 .timeline small { color: var(--console-muted); font-size: 12px; white-space: nowrap; }
 .mode-volume { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .mode-button.on { color: var(--console-brand); background: var(--console-brand-soft); }
@@ -397,6 +449,8 @@ button:disabled { opacity: .45; cursor: wait; }
 .lyrics-box { max-height: 560px; overflow: auto; padding: 8px 0; scrollbar-width: thin; }
 .lyrics-empty { min-height: 220px; display: grid; place-items: center; color: var(--console-muted); font-size: 14px; }
 .lyric-line { margin: 0; padding: 9px 20px; border-radius: 12px; color: var(--console-muted-2); font-size: 16.5px; font-weight: 500; line-height: 1.65; transition: color .2s ease, font-size .2s ease, font-weight .2s ease; }
+.lyric-line[role="button"] { cursor: pointer; }
+.lyric-line[role="button"]:hover, .lyric-line[role="button"]:focus-visible { background: var(--console-hover); outline: 0; }
 .lyric-line.before { color: var(--console-muted); }
 .lyric-line.active { margin: auto 0; color: var(--console-ink); font-size: 19px; font-weight: 800; }
 .np-bottom { display: none; }

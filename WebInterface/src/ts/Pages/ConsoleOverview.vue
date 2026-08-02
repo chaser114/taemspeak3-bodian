@@ -32,7 +32,7 @@
             <span class="track-index">{{ String(index + 1).padStart(2, '0') }}</span>
             <img v-if="cover(track)" :src="cover(track)" :alt="track.title">
             <i v-else class="cover-placeholder"><b-icon icon="music-note" /></i>
-            <div class="track-info"><b>{{ track.title || '未命名歌曲' }}</b><small>{{ track.type || '歌曲' }}</small></div>
+            <div class="track-info"><b>{{ track.title || '未命名歌曲' }}</b><small>{{ displayType(track.type) }}</small></div>
             <button class="row-action secondary" :disabled="busy" title="加入待播队列" @click="add(track)"><b-icon icon="playlist-plus" size="is-small" /><span>加入</span></button>
             <button class="row-action primary" :disabled="busy" title="立即播放" @click="play(track)"><b-icon icon="play" size="is-small" /><span>播放</span></button>
           </article>
@@ -44,7 +44,7 @@
         <div v-if="state.recent.length" class="recent-strip">
           <article v-for="track in state.recent" :key="track.resource.resid + track.type" class="recent-card" @click="play(track.resource)">
             <div class="recent-cover"><img v-if="track.coverUrl" :src="track.coverUrl" :alt="track.title"><i v-else><b-icon icon="music-note" /></i><button type="button" title="播放" @click.stop="play(track.resource)"><b-icon icon="play" size="is-small" /></button></div>
-            <b>{{ track.title }}</b><small>{{ track.type || '歌曲' }}</small>
+            <b>{{ track.title }}</b><small>{{ displayType(track.type) }}</small>
           </article>
         </div>
         <p v-else class="empty-copy">还没有播放记录。</p>
@@ -65,7 +65,7 @@
             <article v-for="(track, index) in state.recent" :key="track.resource.resid + track.type + index" class="song-row">
               <button type="button" class="row-play" title="播放" aria-label="播放" :disabled="busy" @click="play(track.resource)"><b-icon icon="play" size="is-small" /></button>
               <span class="scover"><img v-if="track.coverUrl" :src="track.coverUrl" :alt="track.title"><b-icon v-else icon="music-note" /></span>
-              <span class="song-info"><b>{{ track.title }}</b><small>{{ track.type || '歌曲' }}</small></span>
+              <span class="song-info"><b>{{ track.title }}</b><small>{{ displayType(track.type) }}</small></span>
               <span class="dur">{{ duration(track) }}</span>
               <button type="button" class="row-add" title="加入待播" aria-label="加入待播" :disabled="busy" @click="add(track.resource)"><b-icon icon="playlist-plus" size="is-small" /></button>
             </article>
@@ -85,6 +85,7 @@
         @volume="setVolume"
         @loop="setLoop"
         @random="setRandom"
+        @seek="seek"
       />
       <ConsoleQueueDrawer :open="queueOpen" :queue="state.queue" :is-admin="isAdmin" @close="queueOpen = false" @play="playQueuedTrack" @clear="clear"/>
     </template>
@@ -138,6 +139,7 @@ export default Vue.extend({
   },
   methods: {
     cover(track: TrackResource) { return track.add && track.add.cover_url; },
+    displayType(_type?: string) { return "歌曲"; },
     statusText(status: string) { return status === "connected" ? "已连接" : status === "connecting" ? "连接中" : "离线"; },
     nextQueueTrack() {
       const queue = this.state.queue || [];
@@ -235,6 +237,12 @@ export default Vue.extend({
       const value = Math.max(0, Math.min(100, Number(volume) || 0));
       return this.call("music/volume", { volume: value, botId: this.botId }, () => {
         this.state = { ...this.state, volume: value };
+      });
+    },
+    seek(position: number) {
+      const value = Math.max(0, Number(position) || 0);
+      return this.call("music/seek", { position: value }, () => {
+        this.state = { ...this.state, position: value };
       });
     },
     setLoop(mode: string) {

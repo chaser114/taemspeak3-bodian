@@ -21,7 +21,7 @@
           >
             <span class="idx">{{ String(index + 1).padStart(2, '0') }}</span>
             <span class="scover"><img v-if="track.coverUrl" :src="track.coverUrl" :alt="track.title"><b-icon v-else icon="music-note" /></span>
-            <span class="info"><strong>{{ track.title }}</strong><small>{{ track.type || '歌曲' }}</small></span>
+            <span class="info"><strong>{{ track.title }}</strong><small>{{ displayType(track.type) }}</small></span>
             <span v-if="track.active" class="eq" aria-label="正在播放"><i></i><i></i><i></i></span>
             <span class="dur">{{ duration(track) }}</span>
           </article>
@@ -47,6 +47,7 @@ export default Vue.extend({
   },
   methods: {
     play(track: Track) { this.$emit("play", track.resource); },
+    displayType(_type?: string) { return "歌曲"; },
     duration(track: Track) {
       const value = track.resource.add && (track.resource.add.duration || track.resource.add.length);
       return value ? String(value) : "--:--";
@@ -94,5 +95,14 @@ footer { padding: 14px 24px calc(env(safe-area-inset-bottom) + 18px); border-top
 @media (max-width: 760px) {
   .drawer { inset: auto 0 0; width: 100%; height: 76vh; height: 76dvh; max-height: 620px; border: 0; border-top: 1px solid var(--console-line-strong); border-radius: 24px 24px 0 0; }
   .drawer-enter .drawer, .drawer-leave-to .drawer { transform: translateY(100%); }
+  .q-row { display: grid; grid-template-columns: 24px 42px minmax(0, 1fr) 16px 42px; gap: 10px; padding: 0 8px; }
+  .q-row .idx { width: auto; text-align: center; }
+  .eq { width: 16px; justify-content: center; }
+  .dur { width: 42px; text-align: right; }
+}
+@media (max-width: 360px) {
+  .q-row { grid-template-columns: 22px 38px minmax(0, 1fr) 14px 38px; gap: 8px; padding: 0 6px; }
+  .scover { width: 38px; height: 38px; }
+  .dur { width: 38px; }
 }
 </style>

@@ -99,6 +99,20 @@ namespace TS3AudioBot.Web
 				return Task.CompletedTask;
 			});
 
+		public Task Seek(double position, string? botId = null)
+			=> OnBot(string.Empty, botId, (playManager, player, playlist) =>
+			{
+				if (playManager.CurrentPlayData is null)
+					return Task.CompletedTask;
+				if (double.IsNaN(position) || double.IsInfinity(position) || position < 0)
+					throw new ArgumentException("播放位置无效。");
+
+				var length = player.Length?.TotalSeconds;
+				if (length.HasValue)
+					position = Math.Min(position, Math.Max(0, length.Value));
+				return player.Seek(TimeSpan.FromSeconds(position));
+			});
+
 		public Task SetLoop(string mode, string? botId = null)
 			=> OnBot(string.Empty, botId, (playManager, player, playlist) =>
 			{

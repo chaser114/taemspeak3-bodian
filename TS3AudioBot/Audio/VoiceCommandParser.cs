@@ -265,6 +265,9 @@ namespace TS3AudioBot.Audio
 		public bool TryCommitControl(string recognizedText, string wakeWord, out VoiceCommand command)
 		{
 			command = null!;
+			if (string.IsNullOrWhiteSpace(recognizedText))
+				return false;
+
 			if (!VoiceCommandParser.TryParse(recognizedText, wakeWord, true, out var candidate)
 				|| candidate.Kind == VoiceCommandKind.PlaySong)
 			{
@@ -301,6 +304,9 @@ namespace TS3AudioBot.Audio
 
 		public bool Confirm(string recognizedText, string wakeWord)
 		{
+			if (string.IsNullOrWhiteSpace(recognizedText))
+				return false;
+
 			var match = VoiceCommandParser.MatchWakeWord(recognizedText, wakeWord);
 			if (match == VoiceWakeWordMatchKind.Confirmed)
 			{

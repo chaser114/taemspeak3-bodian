@@ -32,7 +32,9 @@ namespace TS3AudioBot.Audio
 		private static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
 		private static readonly TimeSpan CommandWindow = TimeSpan.FromSeconds(4);
 		private static readonly TimeSpan SpeakerExpiry = TimeSpan.FromMinutes(2);
-		private const int QueueCapacity = 256;
+		private static readonly TimeSpan MaxFrameAge = TimeSpan.FromMilliseconds(500);
+		private const int QueueCapacity = 48;
+		private const int PartialResultIntervalFrames = 4;
 		private const int SampleRate = 16_000;
 		private const int DecoderBufferSize = 8192;
 
@@ -49,6 +51,7 @@ namespace TS3AudioBot.Audio
 		private CancellationTokenSource? cancellation;
 		private Thread? worker;
 		private Model? model;
+		private long droppedFrames;
 		private bool running;
 		private bool disposed;
 
@@ -81,11 +84,20 @@ namespace TS3AudioBot.Audio
 			if (currentQueue is null)
 				return;
 
-			var frame = new VoiceFrame(meta.In.Sender, meta.Codec.Value, meta.Control, data.ToArray());
+			var frame = new VoiceFrame(meta.In.Sender, meta.Codec.Value, meta.Control, data.ToArray(), DateTime.UtcNow);
 			try
 			{
 				// Never let recognition back-pressure TeamSpeak's packet receiver.
-				currentQueue.TryAdd(frame);
+				if (currentQueue.TryAdd(frame))
+					return;
+
+				// Keep the queue real-time bounded. If recognition falls behind, prefer
+				// the newest audio and let the worker reset its recognizers.
+				currentQueue.TryTake(out _);
+				if (!currentQueue.TryAdd(frame))
+					Interlocked.Increment(ref droppedFrames);
+				else
+					Interlocked.Increment(ref droppedFrames);
 			}
 			catch (InvalidOperationException)
 			{
@@ -126,6 +138,7 @@ namespace TS3AudioBot.Audio
 					Vosk.Vosk.SetLogLevel(-1);
 					model = new Model(modelPath);
 					queue = new BlockingCollection<VoiceFrame>(QueueCapacity);
+					Interlocked.Exchange(ref droppedFrames, 0);
 					cancellation = new CancellationTokenSource();
 					running = true;
 					client.OutStream = packetReader;
@@ -196,14 +209,28 @@ namespace TS3AudioBot.Audio
 		private void RunWorker(BlockingCollection<VoiceFrame> currentQueue, CancellationToken token)
 		{
 			var speakers = new Dictionary<ClientId, SpeakerState>();
+			ClientId? recognitionOwner = null;
 			try
 			{
 				while (!token.IsCancellationRequested)
 				{
+					if (Interlocked.Exchange(ref droppedFrames, 0) > 0)
+						ResetRecognitionState(speakers, ref recognitionOwner);
+
 					if (currentQueue.TryTake(out var frame, 100, token))
-						ProcessFrame(frame, speakers);
-					ExpireCommandWindows(speakers);
-					ExpireSpeakers(speakers);
+					{
+						if (DateTime.UtcNow - frame.EnqueuedAtUtc > MaxFrameAge)
+						{
+							DrainQueue(currentQueue);
+							ResetRecognitionState(speakers, ref recognitionOwner);
+						}
+						else
+						{
+							ProcessFrame(frame, speakers, ref recognitionOwner);
+						}
+					}
+					ExpireCommandWindows(speakers, ref recognitionOwner);
+					ExpireSpeakers(speakers, ref recognitionOwner);
 				}
 			}
 			catch (OperationCanceledException) { }
@@ -216,7 +243,7 @@ namespace TS3AudioBot.Audio
 			}
 		}
 
-		private void ProcessFrame(VoiceFrame frame, Dictionary<ClientId, SpeakerState> speakers)
+		private void ProcessFrame(VoiceFrame frame, Dictionary<ClientId, SpeakerState> speakers, ref ClientId? recognitionOwner)
 		{
 			if (frame.Codec != Codec.OpusVoice)
 				return;
@@ -228,7 +255,7 @@ namespace TS3AudioBot.Audio
 			var wakeWord = config.WakeWord.Value.Trim();
 			if (!speakers.TryGetValue(frame.Sender, out var speaker))
 			{
-				speaker = new SpeakerState(currentModel, wakeWord, SampleRate);
+				speaker = new SpeakerState(currentModel, wakeWord);
 				speakers.Add(frame.Sender, speaker);
 			}
 			else if (!string.Equals(speaker.WakeWord, wakeWord, StringComparison.Ordinal))
@@ -241,6 +268,7 @@ namespace TS3AudioBot.Audio
 				speaker.LastSeenUtc = DateTime.UtcNow;
 				speaker.EndSpeechSegment();
 				HandleSegmentEnd(frame.Sender, speaker);
+				ReleaseRecognitionOwnerIfIdle(frame.Sender, speaker, ref recognitionOwner);
 				return;
 			}
 
@@ -260,12 +288,22 @@ namespace TS3AudioBot.Audio
 			speaker.LastSeenUtc = DateTime.UtcNow;
 			var pcm = decoded.ToArray();
 			var activity = speaker.SpeechDetector.Push(pcm);
-			foreach (var speechFrame in activity.Frames)
-				ProcessSpeechFrame(frame.Sender, speaker, speechFrame);
+			if (activity.Started && recognitionOwner is null)
+			{
+				recognitionOwner = frame.Sender;
+				speaker.ActivateRecognition();
+			}
+
+			if (recognitionOwner.HasValue && recognitionOwner.Value.Equals(frame.Sender))
+			{
+				foreach (var speechFrame in activity.Frames)
+					ProcessSpeechFrame(frame.Sender, speaker, speechFrame);
+			}
 			if (activity.Ended)
 			{
 				speaker.EndSpeechSegment();
 				HandleSegmentEnd(frame.Sender, speaker);
+				ReleaseRecognitionOwnerIfIdle(frame.Sender, speaker, ref recognitionOwner);
 			}
 		}
 
@@ -274,9 +312,7 @@ namespace TS3AudioBot.Audio
 			pcm = SpeechAudioPreprocessor.Prepare(pcm);
 			if (!speaker.CommandMode)
 			{
-				speaker.AcceptWake();
-				speaker.WakeRecognizer.AcceptWaveform(pcm, pcm.Length);
-				var partial = ExtractText(speaker.WakeRecognizer.PartialResult(), "partial");
+				var partial = speaker.AcceptWake(pcm);
 				if (speaker.ConfirmWake(partial))
 				{
 					speaker.BeginCommand();
@@ -316,21 +352,47 @@ namespace TS3AudioBot.Audio
 			speaker.MarkCommandSegmentEnd(DateTime.UtcNow);
 		}
 
-		private void ExpireCommandWindows(Dictionary<ClientId, SpeakerState> speakers)
+		private void ExpireCommandWindows(Dictionary<ClientId, SpeakerState> speakers, ref ClientId? recognitionOwner)
 		{
 			var now = DateTime.UtcNow;
 			foreach (var pair in speakers.Where(x => x.Value.CommandMode && x.Value.ShouldFinishCommand(now)).ToArray())
+			{
 				FinishCommand(pair.Key, pair.Value);
+				ReleaseRecognitionOwnerIfIdle(pair.Key, pair.Value, ref recognitionOwner);
+			}
 		}
 
-		private void ExpireSpeakers(Dictionary<ClientId, SpeakerState> speakers)
+		private void ExpireSpeakers(Dictionary<ClientId, SpeakerState> speakers, ref ClientId? recognitionOwner)
 		{
 			var now = DateTime.UtcNow;
 			foreach (var pair in speakers.Where(x => now - x.Value.LastSeenUtc > SpeakerExpiry).ToArray())
 			{
+				if (recognitionOwner.HasValue && recognitionOwner.Value.Equals(pair.Key))
+					recognitionOwner = null;
 				pair.Value.Dispose();
 				speakers.Remove(pair.Key);
 			}
+		}
+
+		private static void ResetRecognitionState(Dictionary<ClientId, SpeakerState> speakers, ref ClientId? recognitionOwner)
+		{
+			foreach (var speaker in speakers.Values)
+				speaker.ResetForOverload();
+			recognitionOwner = null;
+		}
+
+		private static void ReleaseRecognitionOwnerIfIdle(ClientId sender, SpeakerState speaker, ref ClientId? recognitionOwner)
+		{
+			if (!recognitionOwner.HasValue || !recognitionOwner.Value.Equals(sender) || speaker.CommandMode)
+				return;
+
+			speaker.ReleaseRecognition();
+			recognitionOwner = null;
+		}
+
+		private static void DrainQueue(BlockingCollection<VoiceFrame> currentQueue)
+		{
+			while (currentQueue.TryTake(out _, 0)) { }
 		}
 
 		private void FinishCommand(ClientId sender, SpeakerState speaker)
@@ -524,13 +586,15 @@ namespace TS3AudioBot.Audio
 			public Codec Codec { get; }
 			public PipeControl Control { get; }
 			public byte[] Data { get; }
+			public DateTime EnqueuedAtUtc { get; }
 
-			public VoiceFrame(ClientId sender, Codec codec, PipeControl control, byte[] data)
+			public VoiceFrame(ClientId sender, Codec codec, PipeControl control, byte[] data, DateTime enqueuedAtUtc)
 			{
 				Sender = sender;
 				Codec = codec;
 				Control = control;
 				Data = data;
+				EnqueuedAtUtc = enqueuedAtUtc;
 			}
 		}
 
@@ -544,7 +608,7 @@ namespace TS3AudioBot.Audio
 			public OpusDecoder Decoder { get; }
 			public SpeechActivityDetector SpeechDetector { get; }
 			public byte[] DecodeBuffer { get; } = new byte[DecoderBufferSize];
-			public VoskRecognizer WakeRecognizer { get; private set; }
+			public VoskRecognizer? WakeRecognizer { get; private set; }
 			public VoskRecognizer? CommandRecognizer { get; private set; }
 			public bool CommandMode => CommandRecognizer != null;
 			public DateTime CommandDeadlineUtc => commandTiming.CommandDeadlineUtc;
@@ -553,7 +617,7 @@ namespace TS3AudioBot.Audio
 			public bool CommandHasAudio => commandTiming.HasCommandAudio;
 			public bool CommandCommitted { get; private set; }
 
-			public SpeakerState(Model model, string wakeWord, int sampleRate)
+			public SpeakerState(Model model, string wakeWord)
 			{
 				this.model = model;
 				commandTiming = new VoiceCommandTiming(CommandWindow);
@@ -561,8 +625,9 @@ namespace TS3AudioBot.Audio
 				Decoder = OpusDecoder.Create(sampleRate, 1);
 				SpeechDetector = new SpeechActivityDetector();
 				SpeechDetector.SetHangoverFrames(SpeechActivityDetector.WakeHangoverFrames);
-				WakeRecognizer = CreateWakeRecognizer(sampleRate);
 			}
+
+			public void ActivateRecognition() => EnsureWakeRecognizer(SampleRate);
 
 			private VoskRecognizer CreateWakeRecognizer(int sampleRate)
 			{
@@ -581,17 +646,26 @@ namespace TS3AudioBot.Audio
 					return;
 
 				ResetCommand();
-				WakeRecognizer.Dispose();
 				WakeWord = wakeWord;
 				wakeStability.Reset();
-				WakeRecognizer = CreateWakeRecognizer(sampleRate);
+				if (WakeRecognizer is not null)
+				{
+					WakeRecognizer.Dispose();
+					WakeRecognizer = CreateWakeRecognizer(sampleRate);
+				}
 			}
 
 			public bool ConfirmWake(string partial) => wakeStability.Confirm(partial, WakeWord);
 
-			public void AcceptWake()
+			public string AcceptWake(byte[] pcm)
 			{
+				var recognizer = EnsureWakeRecognizer(SampleRate);
 				wakeHasAudio = true;
+				recognizer.AcceptWaveform(pcm, pcm.Length);
+				wakePartialFrames++;
+				return wakePartialFrames % PartialResultIntervalFrames == 0
+					? ExtractPartialText(recognizer.PartialResult())
+					: string.Empty;
 			}
 
 			public string FlushWake()
@@ -599,8 +673,12 @@ namespace TS3AudioBot.Audio
 				if (!wakeHasAudio)
 					return string.Empty;
 
+				if (WakeRecognizer is null)
+					return string.Empty;
+
 				var result = WakeRecognizer.FinalResult();
 				WakeRecognizer.Reset();
+				wakePartialFrames = 0;
 				wakeHasAudio = false;
 				return result;
 			}
@@ -611,6 +689,7 @@ namespace TS3AudioBot.Audio
 					return;
 				CommandRecognizer = new VoskRecognizer(GetModel(), SampleRate);
 				CommandRecognizer.SetMaxAlternatives(3);
+				commandPartialFrames = 0;
 				SpeechDetector.SetHangoverFrames(SpeechActivityDetector.CommandHangoverFrames);
 				commandTiming.Begin(DateTime.UtcNow);
 			}
@@ -619,7 +698,10 @@ namespace TS3AudioBot.Audio
 			{
 				var endpointDetected = CommandRecognizer!.AcceptWaveform(pcm, pcm.Length);
 				commandTiming.AcceptAudio(countAsCommandAudio, endpointDetected, DateTime.UtcNow);
-				return ExtractPartialText(CommandRecognizer.PartialResult());
+				commandPartialFrames++;
+				return commandPartialFrames % PartialResultIntervalFrames == 0
+					? ExtractPartialText(CommandRecognizer.PartialResult())
+					: string.Empty;
 			}
 
 			public bool TryCommitStableControl(string partial, out VoiceCommand command)
@@ -645,8 +727,23 @@ namespace TS3AudioBot.Audio
 				wakeStability.Reset();
 				commandStability.Reset();
 				SpeechDetector.SetHangoverFrames(SpeechActivityDetector.WakeHangoverFrames);
-				WakeRecognizer.Reset();
+				WakeRecognizer?.Reset();
+				wakePartialFrames = 0;
+				commandPartialFrames = 0;
 				wakeHasAudio = false;
+			}
+
+			public void ReleaseRecognition()
+			{
+				ResetCommand();
+				SpeechDetector.Reset();
+			}
+
+			public void ResetForOverload()
+			{
+				ReleaseRecognition();
+				WakeRecognizer?.Dispose();
+				WakeRecognizer = null;
 			}
 
 			public void EndSpeechSegment() => SpeechDetector.EndSegment();
@@ -654,10 +751,18 @@ namespace TS3AudioBot.Audio
 			public void Dispose()
 			{
 				CommandRecognizer?.Dispose();
-				WakeRecognizer.Dispose();
+				WakeRecognizer?.Dispose();
 				SpeechDetector.Dispose();
 				Decoder.Dispose();
 			}
+
+			private VoskRecognizer EnsureWakeRecognizer(int sampleRate)
+			{
+				return WakeRecognizer ??= CreateWakeRecognizer(sampleRate);
+			}
+
+			private int wakePartialFrames;
+			private int commandPartialFrames;
 		}
 	}
 

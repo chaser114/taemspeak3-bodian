@@ -137,5 +137,26 @@ namespace TS3ABotUnitTests
 			Assert.IsTrue(stability.Confirm("音乐机", "音乐机器人"));
 			Assert.IsTrue(stability.Confirm("音乐器人", "音乐机器人"));
 		}
+
+		[Test]
+		public void PartialWakeIgnoresUnpolledFrames()
+		{
+			var stability = new VoiceWakeStability();
+
+			Assert.IsFalse(stability.Confirm("音乐机", "音乐机器人"));
+			Assert.IsFalse(stability.Confirm(string.Empty, "音乐机器人"));
+			Assert.IsTrue(stability.Confirm("音乐机", "音乐机器人"));
+		}
+
+		[Test]
+		public void StableControlIgnoresUnpolledFrames()
+		{
+			var stability = new VoiceCommandStability();
+
+			Assert.IsFalse(stability.TryCommitControl("暂停", "音乐机器人", out _));
+			Assert.IsFalse(stability.TryCommitControl(string.Empty, "音乐机器人", out _));
+			Assert.IsTrue(stability.TryCommitControl("暂停播放", "音乐机器人", out var command));
+			Assert.AreEqual(VoiceCommandKind.Pause, command.Kind);
+		}
 	}
 }
