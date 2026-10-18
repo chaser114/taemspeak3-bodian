@@ -1,6 +1,8 @@
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+# Pin the SDK image to bookworm (Debian 12). The default 6.0 tag is still based on
+# bullseye, whose security suite has been removed and now returns 404 on apt-get.
+FROM mcr.microsoft.com/dotnet/sdk:6.0-bookworm-slim AS build
 # Pin Node 18 for webpack 4 compatibility (OpenSSL legacy provider).
-RUN apt-get update && apt-get install -y curl ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
