@@ -8,11 +8,66 @@ namespace TS3AudioBot.Web
 {
 	public enum WebAccountRole { User, Admin }
 
+	/// <summary>
+	/// Resolved caller for a console API request. Guests are unauthenticated visitors
+	/// that were explicitly allowed by an admin and are limited to a fixed bot subset.
+	/// </summary>
+	public sealed class WebPrincipal
+	{
+		private readonly IReadOnlyList<string> allowedBots;
+
+		public string Username { get; }
+		public WebAccountRole Role { get; }
+		public bool IsGuest { get; }
+		public bool IsAdmin => Role == WebAccountRole.Admin && !IsGuest;
+		public IReadOnlyList<string> AllowedBots => allowedBots;
+
+		private WebPrincipal(string username, WebAccountRole role, bool isGuest, IReadOnlyList<string> bots)
+		{
+			Username = username;
+			Role = role;
+			IsGuest = isGuest;
+			allowedBots = bots ?? Array.Empty<string>();
+		}
+
+		public static WebPrincipal ForAccount(WebAccount account)
+			=> new WebPrincipal(account.Username, account.Role, false, account.AllowedBots ?? new List<string>());
+
+		public static WebPrincipal Guest(IReadOnlyList<string> bots)
+			=> new WebPrincipal(string.Empty, WebAccountRole.User, true, bots);
+
+		/// <summary>
+		/// Admins control every bot. Accounts with no restriction keep the historic
+		/// "all bots" behaviour; guests must always be given an explicit subset.
+		/// </summary>
+		public bool CanControlBot(string? botId)
+		{
+			if (IsAdmin) return true;
+			if (string.IsNullOrWhiteSpace(botId)) return allowedBots.Count > 0 || !IsGuest;
+			if (allowedBots.Count == 0) return !IsGuest;
+			foreach (var bot in allowedBots)
+				if (string.Equals(bot, botId.Trim(), StringComparison.Ordinal)) return true;
+			return false;
+		}
+
+		/// <summary>
+		/// Normalises a client-supplied bot id. Restricted callers that omit the id
+		/// fall back to their first allowed bot instead of the global default.
+		/// </summary>
+		public string ResolveBotId(string? botId)
+		{
+			if (!string.IsNullOrWhiteSpace(botId)) return botId.Trim();
+			return allowedBots.Count > 0 ? allowedBots[0] : string.Empty;
+		}
+	}
+
 	public sealed class WebAccountService
 	{
 		private const string Accounts = "webAccounts";
 		private const string Sessions = "webSessions";
 		private const string Settings = "webSettings";
+		internal const string GuestEnabledKey = "guest_enabled";
+		internal const string GuestBotsKey = "guest_bots";
 		private readonly LiteCollection<WebAccount> accounts;
 		private readonly LiteCollection<WebSession> sessions;
 		private readonly LiteCollection<WebSetting> settings;
@@ -39,6 +94,45 @@ namespace TS3AudioBot.Web
 		{
 			if (string.IsNullOrWhiteSpace(value) || value.Length > 32) throw new ArgumentException("品牌名称长度必须为 1 至 32 个字符。");
 			settings.Upsert(new WebSetting { Key = "brand_name", Value = value.Trim() });
+		}
+
+		public bool IsGuestEnabled
+			=> string.Equals(settings.FindById(GuestEnabledKey)?.Value, "1", StringComparison.Ordinal);
+
+		public IReadOnlyList<string> GuestBots
+		{
+			get
+			{
+				var raw = settings.FindById(GuestBotsKey)?.Value;
+				if (string.IsNullOrWhiteSpace(raw)) return Array.Empty<string>();
+				var list = new List<string>();
+				foreach (var part in raw.Split('\n'))
+				{
+					var value = part.Trim();
+					if (value.Length > 0 && !list.Contains(value)) list.Add(value);
+				}
+				return list;
+			}
+		}
+
+		/// <summary>Guest mode needs at least one bot, otherwise visitors could reach nothing.</summary>
+		public void SetGuestAccess(bool enabled, IEnumerable<string>? bots)
+		{
+			var list = new List<string>();
+			if (bots != null)
+				foreach (var raw in bots)
+				{
+					var value = raw?.Trim() ?? string.Empty;
+					if (value.Length > 0 && value.Length <= 200 && !list.Contains(value)) list.Add(value);
+				}
+			if (enabled && list.Count == 0)
+				throw new ArgumentException("开启访客模式前，请至少选择一个访客可控制的机器人。");
+
+			lock (sync)
+			{
+				settings.Upsert(new WebSetting { Key = GuestBotsKey, Value = string.Join("\n", list) });
+				settings.Upsert(new WebSetting { Key = GuestEnabledKey, Value = enabled ? "1" : "0" });
+			}
 		}
 
 		public bool IsDescriptionPermissionDismissed
@@ -118,6 +212,66 @@ namespace TS3AudioBot.Web
 		}
 
 		public void Logout(string? sessionId) { if (!string.IsNullOrEmpty(sessionId)) lock (sync) sessions.Delete(sessionId); }
+
+		private const string GuestSessionPrefix = "guest:";
+
+		/// <summary>
+		/// Guest sessions are pure bearer tokens stored in the same session collection.
+		/// They carry no rights by themselves; the principal is rebuilt from the
+		/// current guest settings on every request, so revoking access is immediate.
+		/// </summary>
+		public string CreateGuestSession()
+		{
+			lock (sync)
+			{
+				CleanupExpiredSessions();
+				var id = GuestSessionPrefix + ToBase64Url(RandomNumberGenerator.GetBytes(32));
+				sessions.Insert(new WebSession { Id = id, Username = string.Empty, ExpiresAt = DateTime.UtcNow.Add(SessionLifetime) });
+				return id;
+			}
+		}
+
+		public bool IsGuestSession(string? sessionId)
+		{
+			if (string.IsNullOrEmpty(sessionId) || !sessionId.StartsWith(GuestSessionPrefix, StringComparison.Ordinal)) return false;
+			lock (sync)
+			{
+				var session = sessions.FindById(sessionId);
+				if (session is null) return false;
+				if (session.ExpiresAt < DateTime.UtcNow) { sessions.Delete(session.Id); return false; }
+				session.ExpiresAt = DateTime.UtcNow.Add(SessionLifetime);
+				sessions.Update(session);
+				return true;
+			}
+		}
+
+		/// <summary>
+		/// Restricts which bots a non-admin account may control. An empty list means
+		/// "no restriction" (historic behaviour). Admins are never restricted.
+		/// </summary>
+		public bool SetAccountBots(string username, IEnumerable<string>? bots, out string error)
+		{
+			username = username?.Trim() ?? string.Empty;
+			var list = new List<string>();
+			if (bots != null)
+				foreach (var raw in bots)
+				{
+					var value = raw?.Trim() ?? string.Empty;
+					if (value.Length == 0) continue;
+					if (value.Length > 200) { error = "机器人标识过长。"; return false; }
+					if (!list.Contains(value)) list.Add(value);
+				}
+
+			lock (sync)
+			{
+				var account = accounts.FindById(username);
+				if (account is null) { error = "账号不存在。"; return false; }
+				account.AllowedBots = list;
+				accounts.Update(account);
+				error = string.Empty;
+				return true;
+			}
+		}
 
 		public IReadOnlyList<WebAccount> ListAccounts()
 			=> accounts.FindAll().OrderBy(x => x.CreatedAt).ToArray();
@@ -227,7 +381,17 @@ namespace TS3AudioBot.Web
 		}
 	}
 
-	public sealed class WebAccount { [BsonId] public string Username { get; set; } = string.Empty; public string PasswordHash { get; set; } = string.Empty; public string Salt { get; set; } = string.Empty; public WebAccountRole Role { get; set; } public bool Enabled { get; set; } public DateTime CreatedAt { get; set; } }
+	public sealed class WebAccount
+	{
+		[BsonId] public string Username { get; set; } = string.Empty;
+		public string PasswordHash { get; set; } = string.Empty;
+		public string Salt { get; set; } = string.Empty;
+		public WebAccountRole Role { get; set; }
+		public bool Enabled { get; set; }
+		public DateTime CreatedAt { get; set; }
+		/// <summary>Bot config ids this account may control. Empty = all bots.</summary>
+		public List<string> AllowedBots { get; set; } = new List<string>();
+	}
 	public sealed class WebSession { [BsonId] public string Id { get; set; } = string.Empty; public string Username { get; set; } = string.Empty; public DateTime ExpiresAt { get; set; } }
 	public sealed class WebSetting { [BsonId] public string Key { get; set; } = string.Empty; public string Value { get; set; } = string.Empty; }
 }

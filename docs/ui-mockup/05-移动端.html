@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>方案 A · 移动端</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+	body { width: 1000px; height: 900px; margin: 0; }
+	.phones { padding: 50px 60px; gap: 60px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+	<symbol id="i-note" viewBox="0 0 24 24"><path fill="currentColor" d="M12,3V13.55C11.41,13.21 10.73,13 10,13A3,3 0 0,0 7,16A3,3 0 0,0 10,19A3,3 0 0,0 13,16V7H17V3H12Z"/></symbol>
+	<symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z"/></symbol>
+	<symbol id="i-pause" viewBox="0 0 24 24"><path fill="currentColor" d="M14,19H18V5H14M6,19H10V5H6V19Z"/></symbol>
+	<symbol id="i-prev" viewBox="0 0 24 24"><path fill="currentColor" d="M6,18V6H8V18H6M9.5,12L18,6V18L9.5,12Z"/></symbol>
+	<symbol id="i-next" viewBox="0 0 24 24"><path fill="currentColor" d="M16,18H18V6H16M6,18L14.5,12L6,6V18Z"/></symbol>
+	<symbol id="i-shuffle" viewBox="0 0 24 24"><path fill="currentColor" d="M14.83,13.41L13.42,14.82L16.55,17.95L14.5,20H20V14.5L17.96,16.54L14.83,13.41M14.5,4L16.54,6.04L4,18.59L5.41,20L17.96,7.46L20,9.5V4H14.5Z"/></symbol>
+	<symbol id="i-repeat" viewBox="0 0 24 24"><path fill="currentColor" d="M17,17H7V14L3,18L7,22V19H19V13H17M7,7H17V10L21,6L17,2V5H5V11H7V7Z"/></symbol>
+	<symbol id="i-search" viewBox="0 0 24 24"><path fill="currentColor" d="M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z"/></symbol>
+	<symbol id="i-queue" viewBox="0 0 24 24"><path fill="currentColor" d="M15,6H3V8H15V6M15,10H3V12H15V10M3,16H11V14H3V16M17,6V14.18C16.69,14.07 16.35,14 16,14A3,3 0 0,0 13,17A3,3 0 0,0 16,20A3,3 0 0,0 19,17V8H22V6H17Z"/></symbol>
+	<symbol id="i-home" viewBox="0 0 24 24"><path fill="currentColor" d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></symbol>
+	<symbol id="i-history" viewBox="0 0 24 24"><path fill="currentColor" d="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3Z"/></symbol>
+	<symbol id="i-cog" viewBox="0 0 24 24"><path fill="currentColor" d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></symbol>
+	<symbol id="i-down" viewBox="0 0 24 24"><path fill="currentColor" d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></symbol>
+	<symbol id="i-dots" viewBox="0 0 24 24"><path fill="currentColor" d="M16,12A2,2 0 0,1 18,10A2,2 0 0,1 20,12A2,2 0 0,1 18,14A2,2 0 0,1 16,12M10,12A2,2 0 0,1 12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12M4,12A2,2 0 0,1 6,10A2,2 0 0,1 8,12A2,2 0 0,1 6,14A2,2 0 0,1 4,12Z"/></symbol>
+	<symbol id="i-close" viewBox="0 0 24 24"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></symbol>
+</defs></svg>
+
+<div class="phones">
+	<!-- ============ phone 1: browse ============ -->
+	<div class="phone">
+		<div class="notch"></div>
+		<div class="p-status"><span>9:41</span><span style="letter-spacing:2px">●●● ⏻</span></div>
+
+		<div class="p-body">
+			<div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 10px">
+				<h1 class="p-title" style="margin:0;font-size:24px">点歌</h1>
+				<span class="status-chip connected" style="height:24px;font-size:11px"><i></i>已连接</span>
+			</div>
+
+			<div class="p-search" style="margin-bottom:16px">
+				<svg width="15" height="15"><use href="#i-search"/></svg>
+				<span>搜索音乐、歌手或专辑</span>
+			</div>
+
+			<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+				<b style="font-size:16px;font-weight:750;letter-spacing:-.01em">搜索结果</b>
+				<span style="font-size:11.5px;color:var(--brand);font-weight:600">10 首</span>
+			</div>
+
+			<div class="p-rows">
+				<div class="row playing">
+					<div class="art art-2"><svg width="18" height="18"><use href="#i-note"/></svg></div>
+					<div class="t"><b>晴天</b><span>周杰伦 · 叶惠美</span></div>
+					<span class="eq"><i></i><i></i><i></i></span>
+				</div>
+				<div class="row">
+					<div class="art art-1"><svg width="18" height="18"><use href="#i-note"/></svg></div>
+					<div class="t"><b>稻香</b><span>周杰伦 · 魔杰座</span></div>
+					<span style="color:var(--ink-3);display:grid;place-items:center"><svg width="15" height="15"><use href="#i-play"/></svg></span>
+				</div>
+				<div class="row">
+					<div class="art art-3"><svg width="18" height="18"><use href="#i-note"/></svg></div>
+					<div class="t"><b>夜曲</b><span>周杰伦 · 十一月的萧邦</span></div>
+					<span style="color:var(--ink-3);display:grid;place-items:center"><svg width="15" height="15"><use href="#i-play"/></svg></span>
+				</div>
+				<div class="row">
+					<div class="art art-4"><svg width="18" height="18"><use href="#i-note"/></svg></div>
+					<div class="t"><b>七里香</b><span>周杰伦 · 七里香</span></div>
+					<span style="color:var(--ink-3);display:grid;place-items:center"><svg width="15" height="15"><use href="#i-play"/></svg></span>
+				</div>
+				<div class="row">
+					<div class="art art-7"><svg width="18" height="18"><use href="#i-note"/></svg></div>
+					<div class="t"><b>起风了</b><span>买辣椒也用券</span></div>
+					<span style="color:var(--ink-3);display:grid;place-items:center"><svg width="15" height="15"><use href="#i-play"/></svg></span>
+				</div>
+			</div>
+
+			<div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0 8px">
+				<b style="font-size:16px;font-weight:750;letter-spacing:-.01em">最近播放</b>
+				<span style="font-size:11.5px;color:var(--brand);font-weight:600">全部</span>
+			</div>
+			<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+				<div><div class="art art-5" style="width:100%;aspect-ratio:1;border-radius:7px"><svg width="38" height="38"><use href="#i-note"/></svg></div><b style="display:block;margin-top:6px;font-size:12px">富士山下</b></div>
+				<div><div class="art art-6" style="width:100%;aspect-ratio:1;border-radius:7px"><svg width="38" height="38"><use href="#i-note"/></svg></div><b style="display:block;margin-top:6px;font-size:12px">漠河舞厅</b></div>
+			</div>
+		</div>
+
+		<div class="p-mini">
+			<div class="art art-2"><svg width="18" height="18"><use href="#i-note"/></svg></div>
+			<div class="t"><b>晴天</b><span>周杰伦 · 1:42 / 4:29</span></div>
+			<span style="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--fill-2)"><svg width="15" height="15"><use href="#i-pause"/></svg></span>
+		</div>
+
+		<nav class="p-tabs">
+			<a href="#" class="active"><svg width="20" height="20"><use href="#i-search"/></svg>点歌</a>
+			<a href="#"><svg width="20" height="20"><use href="#i-history"/></svg>最近</a>
+			<a href="#"><svg width="20" height="20"><use href="#i-queue"/></svg>队列</a>
+			<a href="#"><svg width="20" height="20"><use href="#i-cog"/></svg>设置</a>
+		</nav>
+	</div>
+
+	<!-- ============ phone 2: now playing ============ -->
+	<div class="phone np">
+		<div class="notch"></div>
+		<div class="wash"></div>
+		<div class="veil"></div>
+		<div class="np-inner">
+			<div class="np-grip"></div>
+			<div class="np-head" style="position:relative;z-index:3;justify-content:space-between">
+				<button style="color:rgba(255,255,255,.75)"><svg width="20" height="20"><use href="#i-down"/></svg></button>
+				
+				<button style="color:rgba(255,255,255,.75)"><svg width="19" height="19"><use href="#i-dots"/></svg></button>
+			</div>
+
+			<img style="display:none">
+			<div class="art art-2 np-art"><svg width="80" height="80"><use href="#i-note"/></svg></div>
+
+			<div class="np-info">
+				<b>晴天</b>
+				<span>周杰伦 · 叶惠美</span>
+			</div>
+
+			<div class="np-bar">
+				<div class="bar"><i style="width:38%"></i></div>
+				<div class="np-times"><span>1:42</span><span>-2:47</span></div>
+			</div>
+
+			<div class="np-ctrls">
+				<button><svg width="19" height="19"><use href="#i-shuffle"/></svg></button>
+				<button><svg width="24" height="24"><use href="#i-prev"/></svg></button>
+				<button class="play"><svg width="26" height="26"><use href="#i-pause"/></svg></button>
+				<button><svg width="24" height="24"><use href="#i-next"/></svg></button>
+				<button><svg width="19" height="19"><use href="#i-repeat"/></svg></button>
+			</div>
+		</div>
+	</div>
+</div>
+</body>
+</html>

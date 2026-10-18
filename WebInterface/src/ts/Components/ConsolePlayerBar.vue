@@ -1,122 +1,167 @@
 <template>
   <section :class="['player-bar', { expanded }]">
-    <div v-if="expanded" class="now-playing">
-      <header class="np-top">
-        <div class="np-top-side">
-          <button type="button" class="np-icon-button" title="返回" aria-label="返回" @click="expanded = false">
-            <b-icon icon="chevron-left" />
+    <!-- ============ full screen now playing ============ -->
+    <div v-if="expanded" class="stage">
+      <div class="stage-wash" aria-hidden="true"></div>
+      <div class="stage-veil" aria-hidden="true"></div>
+
+      <header class="stage-top">
+        <button type="button" class="stage-icon" title="收起播放器" aria-label="收起播放器" @click="expanded = false">
+          <b-icon icon="chevron-down" />
+        </button>
+        <span class="stage-label">正在播放</span>
+        <div class="stage-top-right">
+          <button type="button" class="stage-icon" :title="'待播队列（' + queueCount + '）'" aria-label="待播队列" @click="$emit('queue')">
+            <b-icon icon="playlist-music" />
           </button>
-          <div class="np-now">
-            <span class="cover-sm"><img v-if="state.current && state.current.coverUrl" :src="state.current.coverUrl" :alt="trackTitle"><b-icon v-else icon="music-note" /></span>
-            <span class="np-now-info"><b>{{ trackTitle }}</b><small>{{ artistTitle }}</small></span>
-          </div>
-        </div>
-        <span class="np-center">正在播放</span>
-        <div class="np-top-side np-top-actions">
-          <button type="button" class="np-icon-button" title="切换深浅色" aria-label="切换深浅色" @click="toggleTheme">
-            <b-icon :icon="currentTheme === 'dark' ? 'white-balance-sunny' : 'weather-night'" />
-          </button>
-          <button type="button" class="np-icon-button" title="返回播放器" aria-label="返回播放器" @click="expanded = false">
+          <button type="button" class="stage-icon" title="关闭" aria-label="关闭" @click="expanded = false">
             <b-icon icon="close" />
           </button>
         </div>
       </header>
 
-      <main class="np-main">
-        <section class="np-left">
-          <div class="big-cover">
-            <img v-if="state.current && state.current.coverUrl" :src="state.current.coverUrl" :alt="trackTitle">
+      <div class="stage-body">
+        <section class="stage-left">
+          <div class="stage-cover">
+            <img v-if="cover" :src="cover" :alt="trackTitle">
             <span v-else><b-icon icon="music-note" size="is-large" /></span>
           </div>
-          <div class="np-song">
+          <div class="stage-meta">
             <b>{{ trackTitle }}</b>
-            <small>{{ artistTitle }}</small>
+            <span>{{ subtitle }}</span>
           </div>
-          <div class="np-controls" aria-label="播放控制">
-            <button type="button" :class="{ on: !!state.random }" title="随机播放" aria-label="随机播放" :disabled="busy" @click="toggleRandom"><b-icon icon="shuffle" /></button>
-            <button type="button" title="上一首" aria-label="上一首" :disabled="!canControl" @click="$emit('previous')"><b-icon icon="skip-previous" /></button>
-            <button type="button" class="play" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')"><b-icon :icon="showPlayIcon ? 'play' : 'pause'" /></button>
-            <button type="button" title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')"><b-icon icon="skip-next" /></button>
-            <button type="button" :class="{ on: loopMode !== 'off' }" :title="loopTitle" :aria-label="loopTitle" :disabled="busy" @click="cycleLoop"><b-icon :icon="loopModeIcon" /></button>
-          </div>
-          <div class="np-progress">
-            <time>{{ time(displayPosition) }}</time>
-            <div class="np-track seek-track">
-              <i :style="{ width: (displayProgressRatio * 100) + '%' }"></i>
-              <input class="seek-input" type="range" min="0" step="0.1" :max="state.length || 0" :value="displayPosition" :disabled="!canSeek" aria-label="调整播放进度" @input="onSeekInput" @change="onSeekCommit">
-            </div>
-            <time>{{ time(state.length || 0) }}</time>
-          </div>
-          <label class="np-volume" :title="'音量 ' + Math.round(localVolume)">
-            <b-icon icon="volume-high" />
-            <input type="range" min="0" max="100" step="1" :value="localVolume" :disabled="busy" @input="onVolumeInput" @change="onVolumeCommit">
-          </label>
         </section>
 
-        <section class="np-lyrics">
-          <div class="lyrics-head">歌词</div>
-          <div v-if="lyricsLoading" class="lyrics-box lyrics-empty">歌词加载中…</div>
-          <div v-else-if="!lyricLines.length" class="lyrics-box lyrics-empty">暂无歌词</div>
-          <div v-else class="lyrics-box">
+        <section class="stage-lyrics" ref="lyricBox">
+          <p v-if="lyricsLoading" class="lyric-empty">歌词加载中…</p>
+          <p v-else-if="!lyricLines.length" class="lyric-empty">暂无歌词</p>
+          <template v-else>
             <p
               v-for="(line, index) in lyricLines"
               :key="index + '-' + line.time"
-              :class="['lyric-line', { active: index === activeLyricIndex, before: index < activeLyricIndex }]"
+              :class="['lyric-line', { active: index === activeLyricIndex, past: index < activeLyricIndex }]"
               :ref="'lyric-' + index"
               :tabindex="canSeek ? 0 : undefined"
               :role="canSeek ? 'button' : undefined"
-              @click="seekToLyric(line.time)"
-              @keydown.enter.prevent="seekToLyric(line.time)"
-              @keydown.space.prevent="seekToLyric(line.time)"
+              @click="seekTo(line.time)"
+              @keydown.enter.prevent="seekTo(line.time)"
+              @keydown.space.prevent="seekTo(line.time)"
             >{{ line.text }}</p>
-          </div>
+          </template>
         </section>
+      </div>
 
-        <div class="np-bottom">
-          <div class="np-progress">
-            <time>{{ time(displayPosition) }}</time>
-            <div class="np-track seek-track">
-              <i :style="{ width: (displayProgressRatio * 100) + '%' }"></i>
-              <input class="seek-input" type="range" min="0" step="0.1" :max="state.length || 0" :value="displayPosition" :disabled="!canSeek" aria-label="调整播放进度" @input="onSeekInput" @change="onSeekCommit">
-            </div>
-            <time>{{ time(state.length || 0) }}</time>
-          </div>
-          <div class="np-controls" aria-label="播放控制">
-            <button type="button" :class="{ on: !!state.random }" title="随机播放" aria-label="随机播放" :disabled="busy" @click="toggleRandom"><b-icon icon="shuffle" /></button>
-            <button type="button" title="上一首" aria-label="上一首" :disabled="!canControl" @click="$emit('previous')"><b-icon icon="skip-previous" /></button>
-            <button type="button" class="play" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')"><b-icon :icon="showPlayIcon ? 'play' : 'pause'" /></button>
-            <button type="button" title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')"><b-icon icon="skip-next" /></button>
-            <button type="button" :class="{ on: loopMode !== 'off' }" :title="loopTitle" :aria-label="loopTitle" :disabled="busy" @click="cycleLoop"><b-icon :icon="loopModeIcon" /></button>
-          </div>
-          <label class="np-volume" :title="'音量 ' + Math.round(localVolume)">
-            <b-icon icon="volume-high" />
-            <input type="range" min="0" max="100" step="1" :value="localVolume" :disabled="busy" @input="onVolumeInput" @change="onVolumeCommit">
-          </label>
-          <div class="np-toolbar">
-            <button type="button" class="np-icon-button" title="播放队列" aria-label="播放队列" @click="$emit('queue')"><b-icon icon="playlist-music" /></button>
-          </div>
+      <footer class="stage-foot">
+        <div class="stage-controls">
+          <button type="button" :class="{ on: !!state.random }" title="随机播放" aria-label="随机播放" :disabled="busy" @click="toggleRandom"><b-icon icon="shuffle" /></button>
+          <button type="button" title="上一首" aria-label="上一首" :disabled="!canControl" @click="$emit('previous')"><b-icon icon="skip-previous" /></button>
+          <button type="button" class="stage-play" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')">
+            <b-icon :icon="showPlayIcon ? 'play' : 'pause'" />
+          </button>
+          <button type="button" title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')"><b-icon icon="skip-next" /></button>
+          <button type="button" :class="{ on: loopMode !== 'off' }" :title="loopTitle" :aria-label="loopTitle" :disabled="busy" @click="cycleLoop">
+            <b-icon :icon="loopModeIcon" />
+          </button>
         </div>
-      </main>
+
+        <div class="stage-timeline">
+          <time>{{ time(displayPosition) }}</time>
+          <div
+            class="seek-bar"
+            :class="{ disabled: !canSeek, dragging: dragging }"
+            ref="stageSeek"
+            role="slider"
+            tabindex="0"
+            :aria-valuemin="0"
+            :aria-valuemax="Math.round(state.length || 0)"
+            :aria-valuenow="Math.round(displayPosition)"
+            aria-label="播放进度"
+            @pointerdown="onPointerDown($event, 'stage')"
+            @pointermove="onPointerMove($event, 'stage')"
+            @pointerup="onPointerUp($event, 'stage')"
+            @pointercancel="onPointerUp($event, 'stage')"
+            @keydown.left.prevent="nudge(-5)"
+            @keydown.right.prevent="nudge(5)"
+          >
+            <span class="seek-rail"><i :style="{ width: (displayProgressRatio * 100) + '%' }"></i></span>
+            <span class="seek-knob" :style="{ left: (displayProgressRatio * 100) + '%' }"></span>
+          </div>
+          <time>{{ time(state.length || 0) }}</time>
+        </div>
+
+        <label class="stage-volume" :title="'音量 ' + Math.round(localVolume)">
+          <b-icon icon="volume-high" size="is-small" />
+          <input type="range" min="0" max="100" step="1" :value="localVolume" :disabled="busy" aria-label="音量" @input="onVolumeInput" @change="onVolumeCommit">
+        </label>
+      </footer>
     </div>
 
+    <!-- ============ compact bar ============ -->
     <template v-else>
-      <button type="button" class="track-summary" title="打开完整播放器" @click="expanded = true">
-        <img v-if="state.current && state.current.coverUrl" :src="state.current.coverUrl" :alt="trackTitle">
-        <span v-else class="cover-placeholder"><b-icon icon="music-note" size="is-medium" /></span>
-        <span class="track-copy"><b>{{ trackTitle }}</b><small>{{ state.current ? '点击查看歌词' : '搜索后即可加入待播' }}</small></span>
+      <button type="button" class="now-playing" title="打开完整播放器" @click="expanded = true">
+        <span class="np-cover">
+          <img v-if="cover" :src="cover" :alt="trackTitle">
+          <b-icon v-else icon="music-note" size="is-medium" />
+        </span>
+        <span class="np-copy">
+          <b>{{ trackTitle }}</b>
+          <span>{{ state.current ? subtitle : '搜索后即可加入待播' }}</span>
+        </span>
       </button>
-      <div class="controls" aria-label="播放控制">
-        <button type="button" title="上一首" aria-label="上一首" :disabled="!canControl" @click="$emit('previous')"><b-icon icon="skip-previous" /></button>
-        <button type="button" class="play-button" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')"><b-icon :icon="showPlayIcon ? 'play' : 'pause'" size="is-medium" /></button>
-        <button type="button" title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')"><b-icon icon="skip-next" /></button>
+
+      <div class="bar-controls">
+        <button type="button" class="ctrl" title="随机播放" aria-label="随机播放" :class="{ on: !!state.random }" :disabled="busy" @click="toggleRandom">
+          <b-icon icon="shuffle" size="is-small" />
+        </button>
+        <button type="button" class="ctrl" title="上一首" aria-label="上一首" :disabled="!canControl" @click="$emit('previous')">
+          <b-icon icon="skip-previous" />
+        </button>
+        <button type="button" class="ctrl play" :title="pauseTitle" :aria-label="pauseTitle" :disabled="!canControl" @click="$emit('pause')">
+          <b-icon :icon="showPlayIcon ? 'play' : 'pause'" size="is-medium" />
+        </button>
+        <button type="button" class="ctrl" title="下一首" aria-label="下一首" :disabled="!canSkip" @click="$emit('next')">
+          <b-icon icon="skip-next" />
+        </button>
+        <button type="button" class="ctrl" :title="loopTitle" :aria-label="loopTitle" :class="{ on: loopMode !== 'off' }" :disabled="busy" @click="cycleLoop">
+          <b-icon :icon="loopModeIcon" size="is-small" />
+        </button>
       </div>
-      <div class="timeline"><div class="progress-track seek-track"><i :style="{ transform: 'scaleX(' + displayProgressRatio + ')' }"></i><input class="seek-input" type="range" min="0" step="0.1" :max="state.length || 0" :value="displayPosition" :disabled="!canSeek" aria-label="调整播放进度" @input="onSeekInput" @change="onSeekCommit"></div><small>{{ time(displayPosition) }} / {{ time(state.length || 0) }}</small></div>
-      <div class="mode-volume" aria-label="播放模式与音量">
-        <button type="button" class="mode-button" :class="{ on: !!state.random }" title="随机播放" aria-label="随机播放" :disabled="busy" @click="toggleRandom"><b-icon icon="shuffle" size="is-small" /></button>
-        <button type="button" class="mode-button" :class="{ on: loopMode !== 'off' }" :title="loopTitle" :aria-label="loopTitle" :disabled="busy" @click="cycleLoop"><b-icon :icon="loopModeIcon" size="is-small" /></button>
-        <label class="volume" :title="'音量 ' + Math.round(localVolume)"><b-icon icon="volume-high" size="is-small" /><input type="range" min="0" max="100" step="1" :value="localVolume" :disabled="busy" @input="onVolumeInput" @change="onVolumeCommit"><em>{{ Math.round(localVolume) }}</em></label>
+
+      <div class="bar-timeline">
+        <time>{{ time(displayPosition) }}</time>
+        <div
+          class="seek-bar"
+          :class="{ disabled: !canSeek, dragging: dragging }"
+          ref="barSeek"
+          role="slider"
+          tabindex="0"
+          :aria-valuemin="0"
+          :aria-valuemax="Math.round(state.length || 0)"
+          :aria-valuenow="Math.round(displayPosition)"
+          aria-label="播放进度"
+          @pointerdown="onPointerDown($event, 'bar')"
+          @pointermove="onPointerMove($event, 'bar')"
+          @pointerup="onPointerUp($event, 'bar')"
+          @pointercancel="onPointerUp($event, 'bar')"
+          @keydown.left.prevent="nudge(-5)"
+          @keydown.right.prevent="nudge(5)"
+        >
+          <span class="seek-rail"><i :style="{ width: (displayProgressRatio * 100) + '%' }"></i></span>
+          <span class="seek-knob" :style="{ left: (displayProgressRatio * 100) + '%' }"></span>
+        </div>
+        <time>{{ time(state.length || 0) }}</time>
       </div>
-      <button type="button" class="queue-button" title="待播队列" aria-label="待播队列" @click="$emit('queue')"><b-icon icon="playlist-music" /><em v-if="state.queue.length">{{ state.queue.length }}</em></button>
+
+      <div class="bar-right">
+        <label class="bar-volume" :title="'音量 ' + Math.round(localVolume)">
+          <b-icon icon="volume-high" size="is-small" />
+          <input type="range" min="0" max="100" step="1" :value="localVolume" :disabled="busy" aria-label="音量" @input="onVolumeInput" @change="onVolumeCommit">
+        </label>
+        <button type="button" class="queue-button" :title="'待播队列（' + queueCount + '）'" aria-label="待播队列" @click="$emit('queue')">
+          <b-icon icon="playlist-music" />
+          <em v-if="queueCount">{{ queueCount }}</em>
+        </button>
+      </div>
     </template>
   </section>
 </template>
@@ -147,14 +192,20 @@ export default Vue.extend({
       lyricsLoading: false,
       lyricsTrackKey: "",
       seekDraft: null as number | null,
+      dragging: false,
       localVolume: 50,
       volumeTimer: 0 as any,
     };
   },
-  mounted() { this.frameId = requestAnimationFrame(() => this.tick()); },
+  mounted() {
+    this.frameId = requestAnimationFrame(() => this.tick());
+    window.addEventListener("resize", this.onResize as any);
+  },
   beforeDestroy() {
     cancelAnimationFrame(this.frameId);
     if (this.volumeTimer) clearTimeout(this.volumeTimer);
+    window.removeEventListener("resize", this.onResize as any);
+    this.endDrag();
   },
   watch: {
     state: {
@@ -199,14 +250,16 @@ export default Vue.extend({
     },
   },
   computed: {
+    cover(): string {
+      return this.state.current && this.state.current.coverUrl ? this.state.current.coverUrl : "";
+    },
+    queueCount(): number {
+      return this.state.queue ? this.state.queue.length : 0;
+    },
     livePosition(): number {
       const state = this.state as MusicState;
       if (!state.current) return 0;
       return state.length ? Math.min(state.length, this.renderedPosition) : this.renderedPosition;
-    },
-    progressRatio(): number {
-      const state = this.state as MusicState;
-      return state.length ? Math.min(1, Math.max(0, this.livePosition / state.length)) : 0;
     },
     displayPosition(): number {
       const state = this.state as MusicState;
@@ -220,11 +273,11 @@ export default Vue.extend({
     trackTitle(): string {
       return this.state.current ? this.state.current.title : "等待点歌";
     },
-    artistTitle(): string {
-      return this.state.current ? "歌曲" : "暂无播放";
-    },
-    currentTheme(): string {
-      return document.documentElement.getAttribute("data-theme") || "light";
+    subtitle(): string {
+      if (!this.state.current) return "暂无播放";
+      const add = this.state.current.resource.add || {};
+      const artist = add.artist || add.singer || "";
+      return artist ? artist : "歌曲";
     },
     canControl(): boolean {
       return !this.busy && !!this.state.current;
@@ -320,8 +373,77 @@ export default Vue.extend({
       this.frameId = requestAnimationFrame(() => this.tick());
     },
     time(seconds: number) {
-      return Math.floor(seconds / 60) + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
+      const total = Math.max(0, Math.floor(seconds || 0));
+      return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
     },
+
+    /* ---------- seeking (click / drag / keyboard) ---------- */
+    seekTargetOf($event: PointerEvent, refName: "bar" | "stage"): number | null {
+      const el = this.$refs[refName === "bar" ? "barSeek" : "stageSeek"] as HTMLElement | undefined;
+      const length = Number(this.state.length) || 0;
+      if (!el || !length) return null;
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0) return null;
+      const ratio = Math.min(1, Math.max(0, ($event.clientX - rect.left) / rect.width));
+      return ratio * length;
+    },
+    onPointerDown($event: PointerEvent, refName: "bar" | "stage") {
+      if (!this.canSeek) return;
+      const target = this.seekTargetOf($event, refName);
+      if (target === null) return;
+      this.dragging = true;
+      this.seekDraft = target;
+      const el = $event.currentTarget as HTMLElement;
+      if (el && el.setPointerCapture) {
+        try { el.setPointerCapture($event.pointerId); } catch (_) { /* ignore */ }
+      }
+    },
+    onPointerMove($event: PointerEvent, refName: "bar" | "stage") {
+      if (!this.dragging) return;
+      const target = this.seekTargetOf($event, refName);
+      if (target !== null) this.seekDraft = target;
+    },
+    onPointerUp($event: PointerEvent, refName: "bar" | "stage") {
+      if (!this.dragging) return;
+      const target = this.seekTargetOf($event, refName);
+      this.endDrag();
+      const value = target === null ? this.seekDraft : target;
+      if (value === null) return;
+      if (!this.canSeek) return;
+      this.seekDraft = value;
+      this.$emit("seek", value);
+      // Keep the optimistic position until the next poll confirms it.
+      this.renderedPosition = value;
+      this.serverPosition = value;
+      this.syncedAt = Date.now();
+    },
+    endDrag() {
+      this.dragging = false;
+    },
+    onResize() {
+      if (this.dragging) this.endDrag();
+    },
+    nudge(delta: number) {
+      if (!this.canSeek) return;
+      const length = Number(this.state.length) || 0;
+      const next = Math.min(length, Math.max(0, this.displayPosition + delta));
+      this.seekDraft = next;
+      this.renderedPosition = next;
+      this.serverPosition = next;
+      this.syncedAt = Date.now();
+      this.$emit("seek", next);
+    },
+    seekTo(position: number) {
+      if (!this.canSeek || !Number.isFinite(position)) return;
+      const length = Number(this.state.length) || 0;
+      const next = Math.max(0, Math.min(length, position));
+      this.seekDraft = next;
+      this.renderedPosition = next;
+      this.serverPosition = next;
+      this.syncedAt = Date.now();
+      this.$emit("seek", next);
+    },
+
     onVolumeInput(event: Event) {
       const value = Number((event.target as HTMLInputElement).value);
       this.localVolume = value;
@@ -340,26 +462,6 @@ export default Vue.extend({
       }
       this.$emit("volume", value);
     },
-    onSeekInput(event: Event) {
-      const value = Number((event.target as HTMLInputElement).value);
-      if (!Number.isFinite(value)) return;
-      const length = Number(this.state.length) || 0;
-      this.seekDraft = Math.max(0, length ? Math.min(length, value) : value);
-    },
-    onSeekCommit(event: Event) {
-      const value = Number((event.target as HTMLInputElement).value);
-      if (!Number.isFinite(value)) return;
-      const length = Number(this.state.length) || 0;
-      if (!this.canSeek || !length) return;
-      this.seekDraft = Math.max(0, Math.min(length, value));
-      this.$emit("seek", this.seekDraft);
-    },
-    seekToLyric(position: number) {
-      if (!this.canSeek || !Number.isFinite(position)) return;
-      const length = Number(this.state.length) || 0;
-      this.seekDraft = Math.max(0, Math.min(length, position));
-      this.$emit("seek", this.seekDraft);
-    },
     cycleLoop() {
       const order = ["off", "all", "one"];
       const current = this.loopMode;
@@ -369,134 +471,235 @@ export default Vue.extend({
     toggleRandom() {
       this.$emit("random", !this.state.random);
     },
-    toggleTheme() {
-      const next = this.currentTheme === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", next);
-      window.localStorage.setItem("bd-theme", next);
-    },
   },
 });
 </script>
 
 <style scoped lang="less">
 button { border: 0; background: transparent; cursor: pointer; color: inherit; }
-button:disabled { opacity: .45; cursor: wait; }
-.player-bar { position: fixed; z-index: 6; left: calc(240px + 28px); right: 28px; bottom: 20px; height: 76px; display: flex; align-items: center; gap: 16px; padding: 10px 18px; border: 1px solid var(--console-line); border-radius: var(--console-radius-full); background: var(--console-glass); box-shadow: var(--console-shadow); backdrop-filter: blur(24px) saturate(150%); color: var(--console-ink); }
-.player-bar.expanded { left: 0; right: 0; bottom: 0; width: 100%; height: 100vh; height: 100dvh; padding: 0; display: block; border: 0; border-radius: 0; background: var(--console-bg); box-shadow: none; backdrop-filter: none; }
-.track-summary { min-width: 190px; max-width: 28%; display: flex; align-items: center; gap: 12px; color: var(--console-ink); text-align: left; }
-.track-summary img, .cover-placeholder { width: 56px; height: 56px; flex: 0 0 56px; display: grid; place-items: center; border-radius: 10px; object-fit: cover; background: var(--console-surface-3); color: var(--console-brand); }
-.track-copy { min-width: 0; }
-.track-copy b, .track-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.track-copy b { font-size: 13px; font-weight: 700; }
-.track-copy small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
-.controls { display: flex; align-items: center; gap: 6px; }
-.controls button, .mode-button, .queue-button { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; color: var(--console-muted); }
-.controls button:hover:not(:disabled), .mode-button:hover:not(:disabled), .queue-button:hover { background: var(--console-hover); color: var(--console-ink); }
-.controls .play-button { width: 46px; height: 46px; background: var(--console-brand); color: #fff; }
-.controls .play-button:hover:not(:disabled) { background: var(--console-brand-dark); color: #fff; }
-.timeline { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 140px; }
-.progress-track { height: 4px; flex: 1; overflow: hidden; border-radius: 999px; background: var(--console-surface-3); }
-.progress-track i { display: block; width: 100%; height: 100%; background: var(--console-brand); transform-origin: left center; }
-.seek-track { position: relative; overflow: visible; }
-.seek-track i { pointer-events: none; }
-.seek-input { position: absolute; z-index: 1; inset: -9px 0; width: auto; height: 22px; margin: 0; opacity: 0; cursor: pointer; }
-.seek-input:disabled { cursor: default; }
-.timeline small { color: var(--console-muted); font-size: 12px; white-space: nowrap; }
-.mode-volume { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
-.mode-button.on { color: var(--console-brand); background: var(--console-brand-soft); }
-.volume { display: flex; align-items: center; gap: 6px; min-width: 118px; color: var(--console-muted); font-size: 12px; }
-.volume input[type="range"], .np-volume input[type="range"] { width: 88px; accent-color: var(--console-brand); cursor: pointer; }
-.volume em { min-width: 24px; font-style: normal; color: var(--console-muted); text-align: right; }
-.queue-button { position: relative; width: 44px; height: 44px; }
-.queue-button em { position: absolute; top: -2px; right: -2px; min-width: 17px; padding: 0 4px; border-radius: 10px; background: var(--console-brand); color: #fff; font-size: 10px; font-style: normal; line-height: 16px; text-align: center; }
+button:disabled { opacity: .42; cursor: not-allowed; }
+time { font-variant-numeric: tabular-nums; }
 
-.now-playing { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--console-bg); color: var(--console-ink); }
-.np-top { height: 64px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
-.np-top-side { display: flex; align-items: center; gap: 4px; min-width: 84px; }
-.np-top-actions { justify-content: flex-end; }
-.np-center { margin: 0 auto; color: var(--console-muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; }
-.np-icon-button { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; color: var(--console-muted); }
-.np-icon-button:hover { background: var(--console-hover); color: var(--console-ink); }
-.np-now { display: none; align-items: center; gap: 10px; min-width: 0; }
-.cover-sm { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; overflow: hidden; border-radius: 8px; background: var(--console-surface-2); color: var(--console-muted); }
-.cover-sm img { width: 100%; height: 100%; object-fit: cover; }
-.np-now-info { min-width: 0; }
-.np-now-info b, .np-now-info small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-now-info b { font-size: 14px; }
-.np-now-info small { margin-top: 2px; color: var(--console-muted); font-size: 12px; }
-.np-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 56px; padding: 20px 56px 44px; overflow: hidden; }
-.np-left { display: flex; flex-direction: column; align-items: center; justify-self: center; width: 100%; max-width: 560px; }
-.big-cover { width: 34vw; max-width: 400px; aspect-ratio: 1; display: grid; place-items: center; overflow: hidden; border-radius: 18px; background: var(--console-surface-2); color: var(--console-muted); box-shadow: var(--console-shadow); }
-.big-cover img { width: 100%; height: 100%; object-fit: cover; }
-.np-song { margin-top: 28px; text-align: center; }
-.np-song b, .np-song small { display: block; }
-.np-song b { font-size: 27px; font-weight: 800; line-height: 1.2; }
-.np-song small { margin-top: 5px; color: var(--console-muted); font-size: 15px; }
-.np-controls { display: flex; align-items: center; gap: 10px; margin-top: 24px; }
-.np-controls button { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; color: var(--console-muted); }
-.np-controls button:hover:not(:disabled) { background: var(--console-hover); color: var(--console-ink); }
-.np-controls button.on { color: var(--console-brand); }
-.np-controls .play { width: 64px; height: 64px; margin: 0 10px; background: var(--console-ink); color: var(--console-bg); }
-.np-progress { width: 100%; max-width: 500px; display: flex; align-items: center; gap: 12px; margin-top: 20px; }
-.np-progress time { min-width: 34px; color: var(--console-muted-2); font-size: 11px; font-variant-numeric: tabular-nums; }
-.np-progress time:last-child { text-align: right; }
-.np-track { position: relative; flex: 1; height: 6px; overflow: hidden; border-radius: 999px; background: var(--console-surface-3); }
-.np-track i { display: block; height: 100%; border-radius: inherit; background: var(--console-brand); }
-.np-volume { display: flex; align-items: center; gap: 10px; margin-top: 22px; color: var(--console-muted); }
-.np-volume input[type="range"] { width: 140px; }
-.np-lyrics { align-self: center; width: 100%; max-width: 560px; justify-self: center; min-height: 0; }
-.lyrics-head { margin-bottom: 6px; padding: 0 20px; color: var(--console-muted-2); font-size: 12px; font-weight: 700; letter-spacing: .1em; }
-.lyrics-box { max-height: 560px; overflow: auto; padding: 8px 0; scrollbar-width: thin; }
-.lyrics-empty { min-height: 220px; display: grid; place-items: center; color: var(--console-muted); font-size: 14px; }
-.lyric-line { margin: 0; padding: 9px 20px; border-radius: 12px; color: var(--console-muted-2); font-size: 16.5px; font-weight: 500; line-height: 1.65; transition: color .2s ease, font-size .2s ease, font-weight .2s ease; }
-.lyric-line[role="button"] { cursor: pointer; }
-.lyric-line[role="button"]:hover, .lyric-line[role="button"]:focus-visible { background: var(--console-hover); outline: 0; }
-.lyric-line.before { color: var(--console-muted); }
-.lyric-line.active { margin: auto 0; color: var(--console-ink); font-size: 19px; font-weight: 800; }
-.np-bottom { display: none; }
-
-@media (max-width: 1023px) {
-  .player-bar { left: 12px; right: 12px; bottom: calc(var(--console-nav-h) + env(safe-area-inset-bottom) + 10px); }
-  .now-playing { position: fixed; z-index: 20; }
-  .player-bar.expanded { left: 0; right: 0; bottom: 0; height: 100vh; height: 100dvh; }
-  .np { background: linear-gradient(180deg, var(--console-surface-2) 0%, var(--console-bg) 42%); }
-  .np-top { height: 58px; padding: 0 14px; }
-  .np-top .np-top-side:first-child { flex: 1; min-width: 0; }
-  .np-top .np-center { display: none; }
-  .np-now { display: flex; }
-  .np-main { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 6px 24px calc(env(safe-area-inset-bottom) + 8px); overflow-y: auto; }
-  .np-left { display: none; }
-  .np-lyrics { width: 100%; flex: 1 1 auto; min-height: 0; margin-top: 2px; }
-  .lyrics-head { display: none; }
-  .lyrics-box { height: 100%; max-height: none; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 10%, #000 90%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 10%, #000 90%, transparent 100%); }
-  .lyric-line { padding: 11px 0; color: var(--console-muted-2); font-size: 16px; line-height: 1.55; }
-  .lyric-line.active { margin: 4px 0; color: var(--console-ink); font-size: 26px; }
-  .np-bottom { display: flex; flex-direction: column; padding-top: 2px; }
-  .np-bottom .np-progress { margin-top: 0; max-width: none; }
-  .np-bottom .np-track { height: 4px; }
-  .np-bottom .np-controls { margin-top: 10px; justify-content: center; }
-  .np-bottom .np-controls button { width: 40px; height: 40px; }
-  .np-bottom .np-controls .play { width: 56px; height: 56px; margin: 0 8px; background: var(--console-ink); color: var(--console-bg); }
-  .np-bottom .np-volume { justify-content: center; margin-top: 14px; }
-  .np-bottom .np-volume input[type="range"] { width: 110px; }
-  .np-toolbar { display: flex; align-items: center; justify-content: center; margin-top: 10px; }
+/* ================= compact bar ================= */
+.player-bar {
+  position: fixed; z-index: 6; inset: auto 0 0 0;
+  height: var(--console-player-h);
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(220px, 1.4fr) auto;
+  align-items: center; gap: 18px;
+  padding: 0 22px;
+  background: var(--console-glass);
+  border-top: 1px solid var(--console-line);
+  backdrop-filter: blur(26px) saturate(180%);
+  color: var(--console-ink);
 }
-@media (max-width: 560px) {
-  .player-bar { left: 8px; right: 8px; bottom: calc(var(--console-nav-h) + env(safe-area-inset-bottom) + 8px); }
-  .player-bar:not(.expanded) { display: grid; grid-template-columns: minmax(0, 1fr) 108px; grid-template-rows: 43px 25px; grid-template-areas: "summary controls" "modes queue"; gap: 4px 8px; padding: 9px 12px; }
-  .player-bar:not(.expanded) .track-summary { grid-area: summary; min-width: 0; max-width: none; }
-  .player-bar:not(.expanded) .track-summary img, .player-bar:not(.expanded) .cover-placeholder { width: 48px; height: 48px; flex-basis: 48px; }
-  .player-bar:not(.expanded) .controls { grid-area: controls; justify-self: end; gap: 0; }
-  .player-bar:not(.expanded) .controls button { width: 30px; height: 36px; }
-  .player-bar:not(.expanded) .controls .play-button { width: 40px; height: 40px; }
-  .player-bar:not(.expanded) .timeline { position: absolute; top: 0; left: 0; right: 0; display: block; min-width: 0; height: 2px; pointer-events: none; }
-  .player-bar:not(.expanded) .timeline small { display: none; }
-  .player-bar:not(.expanded) .progress-track { height: 2px; border-radius: 0; }
-  .player-bar:not(.expanded) .mode-volume { grid-area: modes; min-width: 0; }
-  .player-bar:not(.expanded) .queue-button { grid-area: queue; justify-self: end; width: 36px; height: 36px; }
-  .np-main { padding-left: 24px; padding-right: 24px; }
-  .np-top-actions .np-icon-button:last-child { display: none; }
-  .np-controls { gap: 4px; }
-  .np-toolbar { padding-bottom: env(safe-area-inset-bottom); }
+.player-bar.expanded {
+  inset: 0; height: 100vh; height: 100dvh;
+  display: block; padding: 0;
+  width: 100vw; max-width: 100vw;
+  overflow: hidden;
+  background: #0b0b0d; border: 0; color: #fff;
+}
+
+.now-playing {
+  min-width: 0; display: flex; align-items: center; gap: 12px;
+  padding: 0; text-align: left;
+}
+.np-cover {
+  width: 52px; height: 52px; flex: 0 0 auto;
+  display: grid; place-items: center; overflow: hidden;
+  border-radius: 6px; background: var(--console-surface-3); color: var(--console-brand);
+}
+.np-cover img { width: 100%; height: 100%; object-fit: cover; }
+.np-copy { min-width: 0; }
+.np-copy b, .np-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-copy b { font-size: 13.5px; font-weight: 600; }
+.np-copy span { margin-top: 2px; color: var(--console-muted); font-size: 12px; }
+
+.bar-controls { display: flex; align-items: center; gap: 12px; }
+.ctrl { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; color: var(--console-ink); opacity: .82; }
+.ctrl:hover:not(:disabled) { opacity: 1; background: var(--console-hover); }
+.ctrl.on { color: var(--console-brand); opacity: 1; }
+.ctrl.play { width: 36px; height: 36px; opacity: 1; }
+.ctrl.play:hover:not(:disabled) { background: var(--console-hover); }
+
+.bar-timeline { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.bar-timeline time { flex: 0 0 auto; color: var(--console-muted-2); font-size: 10.5px; }
+
+/* ---------- clickable seek bar ---------- */
+.seek-bar {
+  position: relative; flex: 1; min-width: 60px;
+  height: 16px; display: flex; align-items: center;
+  cursor: pointer; touch-action: none; outline: none;
+}
+.seek-bar.disabled { cursor: default; }
+.seek-rail {
+  position: relative; width: 100%; height: 4px;
+  overflow: hidden; border-radius: 999px;
+  background: var(--console-fill-2);
+  transition: height .12s ease;
+}
+.seek-rail i {
+  position: absolute; inset: 0 auto 0 0;
+  border-radius: 999px; background: var(--console-ink); opacity: .62;
+}
+.seek-bar:hover .seek-rail, .seek-bar.dragging .seek-rail { height: 6px; }
+.seek-knob {
+  position: absolute; top: 50%; width: 12px; height: 12px;
+  margin-left: -6px; border-radius: 50%;
+  background: var(--console-ink); opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity .12s ease;
+  pointer-events: none;
+}
+.seek-bar:hover .seek-knob, .seek-bar:focus-visible .seek-knob, .seek-bar.dragging .seek-knob { opacity: 1; }
+.seek-bar.disabled .seek-knob { display: none; }
+.seek-bar:focus-visible .seek-rail { box-shadow: 0 0 0 3px var(--console-brand-soft); }
+
+.bar-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.bar-volume { display: flex; align-items: center; gap: 7px; color: var(--console-muted); }
+.bar-volume input[type="range"] {
+  width: 92px; height: 4px; margin: 0; border-radius: 999px;
+  appearance: none; background: var(--console-fill-2); cursor: pointer;
+}
+.bar-volume input[type="range"]::-webkit-slider-thumb {
+  width: 12px; height: 12px; border: 0; border-radius: 50%;
+  background: var(--console-ink); appearance: none; cursor: grab;
+}
+.queue-button {
+  position: relative; width: 34px; height: 34px;
+  display: grid; place-items: center; border-radius: 8px;
+  color: var(--console-muted);
+}
+.queue-button:hover { background: var(--console-hover); color: var(--console-ink); }
+.queue-button em {
+  position: absolute; top: -1px; right: -2px;
+  min-width: 15px; height: 15px; padding: 0 3px;
+  display: grid; place-items: center;
+  border-radius: 999px; background: var(--console-brand); color: #fff;
+  font-size: 9.5px; font-style: normal; font-weight: 700;
+}
+
+/* ================= expanded stage ================= */
+.stage { position: relative; height: 100%; overflow: hidden; }
+.stage-wash { position: absolute; inset: -20%; filter: blur(80px) saturate(160%); opacity: .95; }
+.stage-wash::before, .stage-wash::after { content: ""; position: absolute; border-radius: 50%; }
+.stage-wash::before { width: 900px; height: 900px; left: 2%; top: -10%; background: radial-gradient(circle, rgba(255, 154, 107, .85), transparent 62%); }
+.stage-wash::after { width: 780px; height: 780px; right: 0; bottom: -14%; background: radial-gradient(circle, rgba(122, 108, 255, .85), transparent 62%); }
+.stage-veil { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10, 10, 12, .24), rgba(10, 10, 12, .68)); }
+
+.stage-top {
+  position: relative; z-index: 2;
+  height: 62px; display: flex; align-items: center; gap: 12px;
+  padding: 0 20px; color: rgba(255, 255, 255, .8);
+}
+.stage-icon {
+  width: 32px; height: 32px; display: grid; place-items: center;
+  border-radius: 8px; color: rgba(255, 255, 255, .72);
+}
+.stage-icon:hover { background: rgba(255, 255, 255, .13); color: #fff; }
+.stage-label { font-size: 12px; font-weight: 600; letter-spacing: .03em; color: rgba(255, 255, 255, .55); }
+.stage-top-right { margin-left: auto; display: flex; gap: 2px; }
+
+.stage-body {
+  position: relative; z-index: 2;
+  display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
+  gap: 64px; padding: 8px 72px 0;
+  height: calc(100% - 200px);
+  max-width: 100%;
+}
+.stage-left { max-width: 100%; }
+.stage-left { min-width: 0; }
+.stage-cover {
+  width: 100%; aspect-ratio: 1 / 1;
+  display: grid; place-items: center; overflow: hidden;
+  border-radius: 10px; background: rgba(255, 255, 255, .1);
+  color: rgba(255, 255, 255, .8);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
+}
+.stage-cover img { width: 100%; height: 100%; object-fit: cover; }
+.stage-meta { margin-top: 24px; }
+.stage-meta b { display: block; font-size: 21px; font-weight: 750; letter-spacing: -.015em; }
+.stage-meta span { display: block; margin-top: 3px; color: rgba(255, 255, 255, .58); font-size: 14px; }
+
+.stage-lyrics {
+  min-width: 0; height: 100%; overflow-y: auto; padding: 4px 0 40px;
+  display: flex; flex-direction: column; justify-content: center;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 10%, #000 86%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 10%, #000 86%, transparent 100%);
+  scrollbar-width: none;
+}
+.stage-lyrics::-webkit-scrollbar { display: none; }
+.lyric-line {
+  margin: 0; padding: 8px 0;
+  color: rgba(255, 255, 255, .3);
+  font-size: 20px; font-weight: 700; line-height: 1.38; letter-spacing: -.01em;
+  cursor: pointer; transition: color .18s ease, font-size .18s ease;
+}
+.lyric-line:hover { color: rgba(255, 255, 255, .55); }
+.lyric-line.past { color: rgba(255, 255, 255, .16); }
+.lyric-line.active { color: #fff; font-size: 23px; text-shadow: 0 2px 24px rgba(0, 0, 0, .6); }
+.lyric-empty { margin: 0; color: rgba(255, 255, 255, .4); font-size: 15px; }
+
+.stage-foot {
+  position: absolute; z-index: 3; left: 72px; right: 72px; bottom: 28px;
+  display: flex; align-items: center; gap: 26px;
+}
+.stage-controls { display: flex; align-items: center; gap: 20px; color: rgba(255, 255, 255, .9); }
+.stage-controls button { color: inherit; opacity: .85; }
+.stage-controls button:hover:not(:disabled) { opacity: 1; }
+.stage-controls button.on { color: var(--console-brand); opacity: 1; }
+.stage-play {
+  width: 50px; height: 50px; display: grid; place-items: center;
+  border-radius: 50%; background: rgba(255, 255, 255, .14);
+  border: 1px solid rgba(255, 255, 255, .16);
+  backdrop-filter: blur(10px);
+}
+.stage-timeline { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
+.stage-timeline time { flex: 0 0 auto; color: rgba(255, 255, 255, .5); font-size: 11px; }
+.stage-timeline .seek-rail { background: rgba(255, 255, 255, .2); }
+.stage-timeline .seek-rail i { background: #fff; opacity: .92; }
+.stage-timeline .seek-knob { background: #fff; }
+.stage-volume { display: flex; align-items: center; gap: 7px; color: rgba(255, 255, 255, .5); }
+.stage-volume input[type="range"] {
+  width: 86px; height: 4px; margin: 0; appearance: none; border-radius: 999px;
+  background: rgba(255, 255, 255, .22); cursor: pointer;
+}
+.stage-volume input[type="range"]::-webkit-slider-thumb {
+  width: 12px; height: 12px; border: 0; border-radius: 50%;
+  background: #fff; appearance: none; cursor: grab;
+}
+
+/* ================= responsive ================= */
+@media (max-width: 1023px) {
+  .player-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 6px 12px;
+    height: var(--console-player-h);
+    padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
+    bottom: calc(var(--console-nav-h) + env(safe-area-inset-bottom));
+    border-radius: 12px 12px 0 0;
+  }
+  .now-playing { grid-column: 1; grid-row: 1; }
+  .np-cover { width: 40px; height: 40px; }
+  .bar-controls { grid-column: 2; grid-row: 1; gap: 2px; }
+  .ctrl { width: 30px; height: 30px; }
+  .ctrl.play { width: 34px; height: 34px; }
+  .bar-timeline { grid-column: 1 / -1; grid-row: 2; }
+  .bar-right { display: flex; grid-column: 2; grid-row: 2; justify-content: flex-end; }
+  .bar-volume { display: none; }
+  .player-bar.expanded { bottom: 0; border-radius: 0; height: 100dvh; grid-template-columns: 1fr; grid-template-rows: 1fr; }
+
+  .stage-body { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 0 20px; height: calc(100% - 220px); }
+  .stage-left { width: 100%; display: flex; flex-direction: column; align-items: center; }
+  .stage-cover { width: 100%; max-width: ~"min(72vw, 300px)"; margin: 0 auto; }
+  .stage-meta { margin-top: 16px; text-align: center; }
+  .stage-lyrics { display: none; }
+  .stage-foot { left: 16px; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); flex-direction: column; gap: 12px; }
+  .stage-controls { width: 100%; justify-content: space-between; }
+  .stage-timeline { width: 100%; }
+  .stage-volume { display: none; }
+  .stage-label { font-size: 11px; }
 }
 </style>

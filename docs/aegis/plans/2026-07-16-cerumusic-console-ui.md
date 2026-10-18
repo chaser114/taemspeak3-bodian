@@ -29,7 +29,7 @@ Vue 2.6、TypeScript 3.9、Vue Router 3、Buefy 与 Material Design Icons、Less
 ## Verification
 
 ```powershell
-Set-Location 'C:\Users\Administrator\Documents\ts3bot 波点\TS3AudioBot\WebInterface'
+Set-Location '.\WebInterface'
 $env:NODE_OPTIONS='--openssl-legacy-provider'
 npm.cmd run build
 ```

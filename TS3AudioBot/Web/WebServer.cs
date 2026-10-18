@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -249,7 +250,7 @@ namespace TS3AudioBot.Web
 		{
 			var path = ctx.Request.Path.Value?.Trim('/').ToLowerInvariant();
 			ctx.Response.ContentType = "application/json; charset=utf-8";
-			if (path == "status") { await WriteJson(ctx, new { initialized = webAccounts.IsInitialized, brandName = webAccounts.BrandName, botConfigured = rootConfig.GetAllBots()?.Length > 0 }); return; }
+			if (path == "status") { await WriteJson(ctx, new { initialized = webAccounts.IsInitialized, brandName = webAccounts.BrandName, botConfigured = rootConfig.GetAllBots()?.Length > 0, guestEnabled = webAccounts.IsGuestEnabled && webAccounts.GuestBots.Count > 0 }); return; }
 			if (path == "setup" && ctx.Request.Method == "POST")
 			{
 				var body = await ReadJson(ctx); var username = body.Value<string>("username") ?? string.Empty; var password = body.Value<string>("password") ?? string.Empty;
@@ -260,17 +261,38 @@ namespace TS3AudioBot.Web
 			{
 				var body = await ReadJson(ctx); await CreateSession(ctx, body.Value<string>("username") ?? string.Empty, body.Value<string>("password") ?? string.Empty); return;
 			}
+			// Guest mode: an admin may expose a fixed bot subset without login.
+			if (path == "guest/login" && ctx.Request.Method == "POST")
+			{
+				if (!webAccounts.IsGuestEnabled || webAccounts.GuestBots.Count == 0)
+				{ await WriteError(ctx, "访客模式未开启。", StatusCodes.Status403Forbidden); return; }
+				var guestSession = webAccounts.CreateGuestSession();
+				ctx.Response.Cookies.Append("ts3ab_guest", guestSession, GuestCookieOptions(ctx));
+				await WriteJson(ctx, new { username = string.Empty, role = "guest", brandName = webAccounts.BrandName }); return;
+			}
 			var account = webAccounts.GetAccount(ctx.Request.Cookies["ts3ab_session"]);
-			if (account is null) { await WriteError(ctx, "请先登录。", StatusCodes.Status401Unauthorized); return; }
-			if (path == "me") { await WriteJson(ctx, new { username = account.Username, role = account.Role.ToString().ToLowerInvariant(), brandName = webAccounts.BrandName }); return; }
+			WebPrincipal principal;
+			if (account != null)
+			{
+				principal = WebPrincipal.ForAccount(account);
+			}
+			else if (webAccounts.IsGuestSession(ctx.Request.Cookies["ts3ab_guest"]) && webAccounts.IsGuestEnabled && webAccounts.GuestBots.Count > 0)
+			{
+				principal = WebPrincipal.Guest(webAccounts.GuestBots);
+			}
+			else
+			{
+				await WriteError(ctx, "请先登录。", StatusCodes.Status401Unauthorized); return;
+			}
+			if (path == "me") { await WriteJson(ctx, new { username = principal.Username, role = principal.IsGuest ? "guest" : principal.Role.ToString().ToLowerInvariant(), brandName = webAccounts.BrandName, allowedBots = principal.IsAdmin ? Array.Empty<string>() : principal.AllowedBots }); return; }
 			if (path == "update/status")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可查看更新状态。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可查看更新状态。", StatusCodes.Status403Forbidden); return; }
 				await WriteJson(ctx, webUpdate.GetStatus()); return;
 			}
 			if (path == "update/check" && ctx.Request.Method == "POST")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可检查更新。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可检查更新。", StatusCodes.Status403Forbidden); return; }
 				try
 				{
 					var body = await ReadJson(ctx);
@@ -285,12 +307,12 @@ namespace TS3AudioBot.Web
 			}
 			if (path == "update/apply" && ctx.Request.Method == "POST")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可执行更新。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可执行更新。", StatusCodes.Status403Forbidden); return; }
 				try
 				{
 					var body = await ReadJson(ctx);
 					var password = body.Value<string>("password") ?? string.Empty;
-					if (!webAccounts.VerifyCredentials(account.Username, password))
+					if (!webAccounts.VerifyCredentials(principal.Username, password))
 					{
 						await WriteError(ctx, "管理员密码不正确。", StatusCodes.Status401Unauthorized);
 						return;
@@ -307,24 +329,24 @@ namespace TS3AudioBot.Web
 			}
 			if (path == "service/status")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可查看服务状态。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可查看服务状态。", StatusCodes.Status403Forbidden); return; }
 				await WriteJson(ctx, webProcess.GetStatus()); return;
 			}
 			if (path == "service/logs")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可查看日志。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可查看日志。", StatusCodes.Status403Forbidden); return; }
 				var linesText = ctx.Request.Query["lines"].ToString();
 				var lines = int.TryParse(linesText, out var n) ? n : 200;
 				await WriteJson(ctx, webProcess.GetLogs(lines, ctx.Request.Query["source"].ToString())); return;
 			}
 			if (path == "service/stop" && ctx.Request.Method == "POST")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可停止服务。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可停止服务。", StatusCodes.Status403Forbidden); return; }
 				try
 				{
 					var body = await ReadJson(ctx);
 					var password = body.Value<string>("password") ?? string.Empty;
-					if (!webAccounts.VerifyCredentials(account.Username, password))
+					if (!webAccounts.VerifyCredentials(principal.Username, password))
 					{
 						await WriteError(ctx, "管理员密码不正确。", StatusCodes.Status401Unauthorized);
 						return;
@@ -340,12 +362,12 @@ namespace TS3AudioBot.Web
 			}
 			if (path == "service/restart" && ctx.Request.Method == "POST")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可重启服务。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可重启服务。", StatusCodes.Status403Forbidden); return; }
 				try
 				{
 					var body = await ReadJson(ctx);
 					var password = body.Value<string>("password") ?? string.Empty;
-					if (!webAccounts.VerifyCredentials(account.Username, password))
+					if (!webAccounts.VerifyCredentials(principal.Username, password))
 					{
 						await WriteError(ctx, "管理员密码不正确。", StatusCodes.Status401Unauthorized);
 						return;
@@ -365,36 +387,18 @@ namespace TS3AudioBot.Web
 					.Where(x => !string.IsNullOrWhiteSpace(x.Name))
 					.GroupBy(x => x.Name!, StringComparer.Ordinal)
 					.ToDictionary(x => x.Key, x => x.First(), StringComparer.Ordinal);
-				var bots = (rootConfig.GetAllBots() ?? Array.Empty<ConfBot>()).Select(config =>
+				var bots = (rootConfig.GetAllBots() ?? Array.Empty<ConfBot>())
+					.Where(config => principal.CanControlBot(config.Name))
+					.Select(config =>
 				{
 					active.TryGetValue(config.Name ?? string.Empty, out var info);
-					return new { id = config.Name, name = config.Connect.Name.Value, address = account.Role == WebAccountRole.Admin ? config.Connect.Address.Value : null, status = info?.Status.ToString().ToLowerInvariant() ?? "offline" };
+					return new { id = config.Name, name = config.Connect.Name.Value, address = principal.IsAdmin ? config.Connect.Address.Value : null, status = info?.Status.ToString().ToLowerInvariant() ?? "offline" };
 				});
 				await WriteJson(ctx, new { bots }); return;
 			}
-			if (path == "bots/voice" && ctx.Request.Method == "GET")
-			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可以查看语音设置。", StatusCodes.Status403Forbidden); return; }
-				try { await WriteJson(ctx, console.GetVoiceSettings(ctx.Request.Query["botId"].ToString())); }
-				catch (Exception ex) { await WriteError(ctx, ex.Message, StatusCodes.Status422UnprocessableEntity); }
-				return;
-			}
-			if (path == "bots/voice" && ctx.Request.Method == "POST")
-			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可以修改语音设置。", StatusCodes.Status403Forbidden); return; }
-				try
-				{
-					var body = await ReadJson(ctx);
-					var enabled = body.Value<bool?>("enabled") ?? false;
-					await WriteJson(ctx, console.SetVoiceSettings(body.Value<string>("id"), enabled, body.Value<string>("wakeWord")));
-				}
-				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
-				catch (Exception ex) { await WriteError(ctx, ex.Message, StatusCodes.Status422UnprocessableEntity); }
-				return;
-			}
 			if (path == "bots/description-permission")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可查看该提示。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可查看该提示。", StatusCodes.Status403Forbidden); return; }
 				try
 				{
 					var force = string.Equals(ctx.Request.Query["force"].ToString(), "1", StringComparison.Ordinal)
@@ -410,15 +414,15 @@ namespace TS3AudioBot.Web
 			}
 			if (path == "bots/description-permission/dismiss" && ctx.Request.Method == "POST")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可操作。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可操作。", StatusCodes.Status403Forbidden); return; }
 				await WriteJson(ctx, console.DismissDescriptionPermissionNotice()); return;
 			}
 			if (path == "bots/description-permission/reset" && ctx.Request.Method == "POST")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可操作。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可操作。", StatusCodes.Status403Forbidden); return; }
 				await WriteJson(ctx, console.ResetDescriptionPermissionNotice()); return;
 			}
-			if (path == "bots/delete" && account.Role == WebAccountRole.Admin && ctx.Request.Method == "POST")
+			if (path == "bots/delete" && principal.IsAdmin && ctx.Request.Method == "POST")
 			{
 				var id = (await ReadJson(ctx)).Value<string>("id") ?? string.Empty;
 				var info = botManager.GetBotInfolist().FirstOrDefault(x => x.Name == id);
@@ -428,25 +432,25 @@ namespace TS3AudioBot.Web
 				rootConfig.ClearBotConfigCache(id);
 				await WriteJson(ctx, new { ok = true }); return;
 			}
-			if (path == "music/state") { await WriteJson(ctx, await console.GetState(ctx.Request.Query["botId"].ToString())); return; }
+			if (path == "music/state") { var stateBot = principal.ResolveBotId(ctx.Request.Query["botId"].ToString()); if (!await EnsureBotAccess(ctx, principal, stateBot)) return; await WriteJson(ctx, await console.GetState(stateBot)); return; }
 			if (path == "music/lyrics")
 			{
-				try { await WriteJson(ctx, await console.GetLyrics(ctx.Request.Query["botId"].ToString())); }
+				var lyricsBot = principal.ResolveBotId(ctx.Request.Query["botId"].ToString()); if (!await EnsureBotAccess(ctx, principal, lyricsBot)) return; try { await WriteJson(ctx, await console.GetLyrics(lyricsBot)); }
 				catch (Exception ex) { Log.Warn(ex, "Console lyrics request failed."); await WriteError(ctx, "获取歌词失败。", StatusCodes.Status422UnprocessableEntity); }
 				return;
 			}
 			if (path == "music/search" && ctx.Request.Method == "POST")
-			{ try { var body = await ReadJson(ctx); await WriteJson(ctx, new { results = await console.Search(body.Value<string>("query") ?? string.Empty, body.Value<string>("botId")) }); } catch (JsonReaderException) { throw; } catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); } catch (Exception ex) { Log.Warn(ex, "Console music search failed."); await WriteError(ctx, "搜索失败，请稍后重试。", StatusCodes.Status422UnprocessableEntity); } return; }
+			{ try { var body = await ReadJson(ctx); var searchBot = principal.ResolveBotId(body.Value<string>("botId")); if (!await EnsureBotAccess(ctx, principal, searchBot)) return; await WriteJson(ctx, new { results = await console.Search(body.Value<string>("query") ?? string.Empty, searchBot) }); } catch (JsonReaderException) { throw; } catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); } catch (Exception ex) { Log.Warn(ex, "Console music search failed."); await WriteError(ctx, "搜索失败，请稍后重试。", StatusCodes.Status422UnprocessableEntity); } return; }
 			if ((path == "music/play" || path == "music/add") && ctx.Request.Method == "POST")
 			{
-				try { var body = await ReadJson(ctx); var resource = ParseKuwoResource(body.Value<JObject>("resource")); if (path == "music/play") await console.Play(account.Username, resource, body.Value<string>("botId")); else await console.Add(account.Username, resource, body.Value<string>("botId")); await WriteJson(ctx, new { ok = true }); }
+				try { var body = await ReadJson(ctx); var playBot = principal.ResolveBotId(body.Value<string>("botId")); if (!await EnsureBotAccess(ctx, principal, playBot)) return; var resource = ParseKuwoResource(body.Value<JObject>("resource")); if (path == "music/play") await console.Play(principal.Username, resource, playBot); else await console.Add(principal.Username, resource, playBot); await WriteJson(ctx, new { ok = true }); }
 				catch (JsonReaderException) { throw; }
 				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
 				catch (Exception ex) { Log.Warn(ex, "Console music playback request failed."); await WriteError(ctx, "播放失败，请稍后重试。", StatusCodes.Status422UnprocessableEntity); } return;
 			}
-			if (path == "music/next" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.Next(account.Username, body.Value<string>("botId"))); return; }
-			if (path == "music/previous" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.Previous(account.Username, body.Value<string>("botId"))); return; }
-			if (path == "music/pause" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.TogglePause(body.Value<string>("botId"))); return; }
+			if (path == "music/next" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); var nextBot = principal.ResolveBotId(body.Value<string>("botId")); if (!await EnsureBotAccess(ctx, principal, nextBot)) return; await ExecuteMusic(ctx, () => console.Next(principal.Username, nextBot)); return; }
+			if (path == "music/previous" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); var prevBot = principal.ResolveBotId(body.Value<string>("botId")); if (!await EnsureBotAccess(ctx, principal, prevBot)) return; await ExecuteMusic(ctx, () => console.Previous(principal.Username, prevBot)); return; }
+			if (path == "music/pause" && ctx.Request.Method == "POST") { var body = await ReadJson(ctx); var pauseBot = principal.ResolveBotId(body.Value<string>("botId")); if (!await EnsureBotAccess(ctx, principal, pauseBot)) return; await ExecuteMusic(ctx, () => console.TogglePause(pauseBot)); return; }
 			if (path == "music/seek" && ctx.Request.Method == "POST")
 			{
 				try
@@ -454,13 +458,14 @@ namespace TS3AudioBot.Web
 					var body = await ReadJson(ctx);
 					var position = body.Value<double?>("position") ?? body.Value<double?>("seconds");
 					if (position is null) { await WriteError(ctx, "请提供播放位置。", StatusCodes.Status400BadRequest); return; }
-					await ExecuteMusic(ctx, () => console.Seek(position.Value, body.Value<string>("botId")));
+					var seekBot = principal.ResolveBotId(body.Value<string>("botId")); if (!await EnsureBotAccess(ctx, principal, seekBot)) return;
+					await ExecuteMusic(ctx, () => console.Seek(position.Value, seekBot));
 				}
 				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
 				catch (Exception ex) { Log.Warn(ex, "Console seek failed."); await WriteError(ctx, "调整播放进度失败。", StatusCodes.Status422UnprocessableEntity); }
 				return;
 			}
-			if (path == "music/clear" && ctx.Request.Method == "POST") { if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "只有管理员可以清空待播队列。", 403); return; } var body = await ReadJson(ctx); await ExecuteMusic(ctx, () => console.Clear(body.Value<string>("botId"))); return; }
+			if (path == "music/clear" && ctx.Request.Method == "POST") { if (!principal.IsAdmin) { await WriteError(ctx, "只有管理员可以清空待播队列。", 403); return; } var body = await ReadJson(ctx); var clearBot = principal.ResolveBotId(body.Value<string>("botId")); if (!await EnsureBotAccess(ctx, principal, clearBot)) return; await ExecuteMusic(ctx, () => console.Clear(clearBot)); return; }
 			if (path == "music/volume" && ctx.Request.Method == "POST")
 			{
 				try
@@ -468,7 +473,8 @@ namespace TS3AudioBot.Web
 					var body = await ReadJson(ctx);
 					var volume = body.Value<float?>("volume") ?? body.Value<float?>("value");
 					if (volume is null) { await WriteError(ctx, "请提供音量 0-100。", StatusCodes.Status400BadRequest); return; }
-					await ExecuteMusic(ctx, () => console.SetVolume(volume.Value, body.Value<string>("botId")));
+					var volumeBot = principal.ResolveBotId(body.Value<string>("botId")); if (!await EnsureBotAccess(ctx, principal, volumeBot)) return;
+					await ExecuteMusic(ctx, () => console.SetVolume(volume.Value, volumeBot));
 				}
 				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
 				catch (Exception ex) { Log.Warn(ex, "Console volume set failed."); await WriteError(ctx, "设置音量失败。", StatusCodes.Status422UnprocessableEntity); }
@@ -479,7 +485,8 @@ namespace TS3AudioBot.Web
 				try
 				{
 					var body = await ReadJson(ctx);
-					await ExecuteMusic(ctx, () => console.SetLoop(body.Value<string>("mode") ?? "off", body.Value<string>("botId")));
+					var loopBot = principal.ResolveBotId(body.Value<string>("botId")); if (!await EnsureBotAccess(ctx, principal, loopBot)) return;
+					await ExecuteMusic(ctx, () => console.SetLoop(body.Value<string>("mode") ?? "off", loopBot));
 				}
 				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
 				catch (Exception ex) { Log.Warn(ex, "Console loop set failed."); await WriteError(ctx, "设置循环模式失败。", StatusCodes.Status422UnprocessableEntity); }
@@ -491,21 +498,22 @@ namespace TS3AudioBot.Web
 				{
 					var body = await ReadJson(ctx);
 					var enabled = body.Value<bool?>("enabled") ?? body.Value<bool?>("value") ?? false;
-					await ExecuteMusic(ctx, () => console.SetRandom(enabled, body.Value<string>("botId")));
+					var randomBot = principal.ResolveBotId(body.Value<string>("botId")); if (!await EnsureBotAccess(ctx, principal, randomBot)) return;
+					await ExecuteMusic(ctx, () => console.SetRandom(enabled, randomBot));
 				}
 				catch (Exception ex) { Log.Warn(ex, "Console random set failed."); await WriteError(ctx, "设置随机播放失败。", StatusCodes.Status422UnprocessableEntity); }
 				return;
 			}
 			if (path == "settings/brand" && ctx.Request.Method == "POST")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可修改品牌名称。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可修改品牌名称。", StatusCodes.Status403Forbidden); return; }
 				try { webAccounts.SetBrandName((await ReadJson(ctx)).Value<string>("brandName") ?? string.Empty); await WriteJson(ctx, new { brandName = webAccounts.BrandName }); }
 				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
 				return;
 			}
-			if (path == "accounts" && account.Role == WebAccountRole.Admin && ctx.Request.Method == "GET")
-			{ await WriteJson(ctx, new { accounts = webAccounts.ListAccounts().Select(x => new { username = x.Username, role = x.Role.ToString().ToLowerInvariant(), enabled = x.Enabled }) }); return; }
-			if (path == "accounts" && account.Role == WebAccountRole.Admin && ctx.Request.Method == "POST")
+			if (path == "accounts" && principal.IsAdmin && ctx.Request.Method == "GET")
+			{ await WriteJson(ctx, new { accounts = webAccounts.ListAccounts().Select(x => new { username = x.Username, role = x.Role.ToString().ToLowerInvariant(), enabled = x.Enabled, allowedBots = x.AllowedBots ?? new List<string>() }) }); return; }
+			if (path == "accounts" && principal.IsAdmin && ctx.Request.Method == "POST")
 			{
 				try
 				{
@@ -519,8 +527,42 @@ namespace TS3AudioBot.Web
 				catch (Exception ex) { Log.Warn(ex, "Create account failed."); await WriteError(ctx, "创建账号失败，请稍后重试。", StatusCodes.Status422UnprocessableEntity); }
 				return;
 			}
-			if (path == "accounts/enabled" && account.Role == WebAccountRole.Admin && ctx.Request.Method == "POST")
+			if (path == "accounts/enabled" && principal.IsAdmin && ctx.Request.Method == "POST")
 			{ var body = await ReadJson(ctx); if (!webAccounts.SetEnabled(body.Value<string>("username") ?? string.Empty, body.Value<bool?>("enabled") ?? false, out var error)) { await WriteError(ctx, error, 400); return; } await WriteJson(ctx, new { ok = true }); return; }
+			if (path == "accounts/bots" && principal.IsAdmin && ctx.Request.Method == "POST")
+			{
+				try
+				{
+					var body = await ReadJson(ctx);
+					var targetUser = body.Value<string>("username") ?? string.Empty;
+					var botIds = (body["bots"] as JArray)?.Select(x => x?.ToString() ?? string.Empty) ?? Enumerable.Empty<string>();
+					if (!webAccounts.SetAccountBots(targetUser, botIds, out var botError))
+					{ await WriteError(ctx, botError, StatusCodes.Status400BadRequest); return; }
+					await WriteJson(ctx, new { ok = true });
+				}
+				catch (JsonReaderException) { throw; }
+				catch (Exception ex) { Log.Warn(ex, "Set account bots failed."); await WriteError(ctx, "保存机器人权限失败。", StatusCodes.Status422UnprocessableEntity); }
+				return;
+			}
+			if (path == "guest/settings" && principal.IsAdmin && ctx.Request.Method == "GET")
+			{ await WriteJson(ctx, new { enabled = webAccounts.IsGuestEnabled, bots = webAccounts.GuestBots }); return; }
+			if (path == "guest/settings" && principal.IsAdmin && ctx.Request.Method == "POST")
+			{
+				try
+				{
+					var body = await ReadJson(ctx);
+					// Guest exposure is security sensitive: confirm the admin password like other risky actions.
+					if (!webAccounts.VerifyCredentials(principal.Username, body.Value<string>("password") ?? string.Empty))
+					{ await WriteError(ctx, "管理员密码不正确。", StatusCodes.Status401Unauthorized); return; }
+					var botIds = (body["bots"] as JArray)?.Select(x => x?.ToString() ?? string.Empty) ?? Enumerable.Empty<string>();
+					webAccounts.SetGuestAccess(body.Value<bool?>("enabled") ?? false, botIds);
+					await WriteJson(ctx, new { enabled = webAccounts.IsGuestEnabled, bots = webAccounts.GuestBots });
+				}
+				catch (JsonReaderException) { throw; }
+				catch (ArgumentException ex) { await WriteError(ctx, ex.Message, StatusCodes.Status400BadRequest); }
+				catch (Exception ex) { Log.Warn(ex, "Save guest settings failed."); await WriteError(ctx, "保存访客设置失败。", StatusCodes.Status422UnprocessableEntity); }
+				return;
+			}
 			if (path == "accounts/password" && ctx.Request.Method == "POST")
 			{
 				try
@@ -529,16 +571,16 @@ namespace TS3AudioBot.Web
 					var target = body.Value<string>("username")?.Trim() ?? string.Empty;
 					var newPassword = body.Value<string>("newPassword") ?? body.Value<string>("password") ?? string.Empty;
 					// Admin changing someone else's password.
-					if (!string.IsNullOrWhiteSpace(target) && !string.Equals(target, account.Username, StringComparison.OrdinalIgnoreCase))
+					if (!string.IsNullOrWhiteSpace(target) && !string.Equals(target, principal.Username, StringComparison.OrdinalIgnoreCase))
 					{
-						if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可修改他人密码。", StatusCodes.Status403Forbidden); return; }
-						if (!webAccounts.AdminSetPassword(account.Username, target, newPassword, out var adminError))
+						if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可修改他人密码。", StatusCodes.Status403Forbidden); return; }
+						if (!webAccounts.AdminSetPassword(principal.Username, target, newPassword, out var adminError))
 						{ await WriteError(ctx, adminError, StatusCodes.Status400BadRequest); return; }
 						await WriteJson(ctx, new { ok = true, message = "已修改该账号密码，对方需重新登录。" }); return;
 					}
 					// Changing own password (admin or user).
 					var currentPassword = body.Value<string>("currentPassword") ?? body.Value<string>("oldPassword") ?? string.Empty;
-					if (!webAccounts.ChangeOwnPassword(account.Username, currentPassword, newPassword, out var ownError))
+					if (!webAccounts.ChangeOwnPassword(principal.Username, currentPassword, newPassword, out var ownError))
 					{ await WriteError(ctx, ownError, StatusCodes.Status400BadRequest); return; }
 					await WriteJson(ctx, new { ok = true, message = "密码已修改，请重新登录。" });
 				}
@@ -548,7 +590,7 @@ namespace TS3AudioBot.Web
 			}
 			if (path == "setup/bot" && ctx.Request.Method == "POST")
 			{
-				if (account.Role != WebAccountRole.Admin) { await WriteError(ctx, "仅管理员可配置机器人。", StatusCodes.Status403Forbidden); return; }
+				if (!principal.IsAdmin) { await WriteError(ctx, "仅管理员可配置机器人。", StatusCodes.Status403Forbidden); return; }
 				var body = await ReadJson(ctx);
 				var id = body.Value<string>("id")?.Trim() ?? string.Empty;
 				var address = body.Value<string>("address")?.Trim() ?? string.Empty;
@@ -571,7 +613,7 @@ namespace TS3AudioBot.Web
 				await WriteJson(ctx, new { id = started.Value.Id, name = started.Value.Name, server = started.Value.Server });
 				return;
 			}
-			if (path == "logout" && ctx.Request.Method == "POST") { webAccounts.Logout(ctx.Request.Cookies["ts3ab_session"]); ctx.Response.Cookies.Delete("ts3ab_session"); await ctx.Response.WriteAsync("{}"); return; }
+			if (path == "logout" && ctx.Request.Method == "POST") { webAccounts.Logout(ctx.Request.Cookies["ts3ab_session"]); webAccounts.Logout(ctx.Request.Cookies["ts3ab_guest"]); ctx.Response.Cookies.Delete("ts3ab_session"); ctx.Response.Cookies.Delete("ts3ab_guest"); await ctx.Response.WriteAsync("{}"); return; }
 			ctx.Response.StatusCode = StatusCodes.Status501NotImplemented;
 			await ctx.Response.WriteAsync("{\"error\":\"网页控制台正在初始化，请使用最新构建包。\"}");
 		}
@@ -586,6 +628,24 @@ namespace TS3AudioBot.Web
 			ctx.Response.Cookies.Append("ts3ab_session", session, new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Lax, Secure = isHttps, MaxAge = TimeSpan.FromDays(14) });
 			await WriteJson(ctx, new { username, brandName = webAccounts.BrandName });
 		}
+		/// <summary>
+		/// Gate every bot-scoped console action. Guests and restricted accounts may only
+		/// touch the bots an admin assigned to them; this is the single enforcement point.
+		/// </summary>
+		private static async Task<bool> EnsureBotAccess(HttpContext ctx, WebPrincipal principal, string? botId)
+		{
+			if (principal.CanControlBot(botId)) return true;
+			await WriteError(ctx, "没有控制该机器人的权限，请联系管理员分配。", StatusCodes.Status403Forbidden);
+			return false;
+		}
+
+		private static CookieOptions GuestCookieOptions(HttpContext ctx)
+		{
+			var forwardedProto = ctx.Request.Headers["X-Forwarded-Proto"].ToString();
+			var isHttps = ctx.Request.IsHttps || string.Equals(forwardedProto, "https", StringComparison.OrdinalIgnoreCase);
+			return new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Lax, Secure = isHttps, MaxAge = TimeSpan.FromDays(14) };
+		}
+
 		private static async Task<JObject> ReadJson(HttpContext ctx) { using var reader = new StreamReader(ctx.Request.Body); var body = await reader.ReadToEndAsync(); return string.IsNullOrWhiteSpace(body) ? new JObject() : JObject.Parse(body); }
 		private static async Task ExecuteMusic(HttpContext ctx, Func<Task> action) { try { await action(); await WriteJson(ctx, new { ok = true }); } catch (Exception ex) { Log.Warn(ex, "Console music control failed."); await WriteError(ctx, "音乐控制失败，请稍后重试。", StatusCodes.Status422UnprocessableEntity); } }
 		private static AudioResource ParseKuwoResource(JObject? value)

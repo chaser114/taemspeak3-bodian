@@ -1,230 +1,261 @@
 <template>
-  <main class="admin">
-    <header><p>控制台</p><h1>管理机器人与账号</h1></header>
-    <p v-if="error" class="error">{{ error }}</p>
+  <div class="bd-admin">
+    <header class="bd-admin-head">
+      <h1>管理</h1>
+      <p>机器人、网页账号、访客权限与程序更新。</p>
+    </header>
 
-    <section class="update-card" :class="{ highlight: hasUpdate }">
-      <div class="update-copy">
-        <h2>程序更新</h2>
-        <p>
-          当前版本 <b>{{ displayVersion }}</b>
-          <template v-if="hasUpdate"> · 发现新版本 <b class="newer">{{ latestVersion }}</b></template>
-          <template v-else> · 已是最新或待检查</template>
-        </p>
+    <p v-if="error" class="bd-inline-error">{{ error }}</p>
+
+    <!-- ============ 站点 ============ -->
+    <section class="bd-card">
+      <h2>站点</h2>
+      <div class="bd-field">
+        <div class="bd-label"><b>站点名称</b><span>显示在登录页与侧栏</span></div>
+        <div class="bd-control">
+          <input v-model.trim="brandName" class="bd-input" maxlength="32" placeholder="波点音乐">
+          <button type="button" class="bd-pill solid" @click="saveBrand">保存</button>
+        </div>
       </div>
-      <button type="button" :class="{ glow: hasUpdate }" @click="updateOpen = true">
-        {{ hasUpdate ? '立即更新' : '检查更新' }}
-      </button>
+      <div class="bd-field">
+        <div class="bd-label"><b>当前版本</b><span>{{ displayVersion }}</span></div>
+        <div class="bd-control">
+          <span v-if="hasUpdate" class="bd-tag warn">有新版本 {{ latestVersion }}</span>
+          <span v-else class="bd-tag">已是最新</span>
+          <button type="button" class="bd-pill" @click="updateOpen = true">{{ hasUpdate ? '立即更新' : '检查更新' }}</button>
+        </div>
+      </div>
     </section>
     <UpdatePanel :open="updateOpen" @close="updateOpen = false" @applied="onUpdateApplied"/>
 
-    <section class="service-card">
-      <div class="section-heading">
-        <h2>服务与日志</h2>
-        <span v-if="servicePid">PID {{ servicePid }}</span>
+    <!-- ============ 机器人 ============ -->
+    <section class="bd-card">
+      <div class="bd-card-head"><h2>TeamSpeak 机器人</h2><span>{{ bots.length }} 个</span></div>
+      <p v-if="!bots.length" class="bd-muted">还没有创建机器人。</p>
+      <div v-for="bot in bots" :key="bot.id" class="bd-row-item">
+        <span class="bd-row-icon"><b-icon icon="robot" /></span>
+        <span class="bd-row-copy">
+          <b>{{ bot.name }}</b>
+          <span>{{ bot.address || '未填写地址' }}</span>
+        </span>
+        <span class="bd-tag" :class="bot.status">{{ statusText(bot.status) }}</span>
+        <button type="button" class="bd-pill" @click="openEdit(bot)">编辑</button>
+        <button type="button" class="bd-pill danger" @click="remove(bot)">删除</button>
       </div>
-      <div class="service-actions">
-        <button type="button" class="secondary" :disabled="serviceBusy" @click="refreshLogs">刷新日志</button>
-        <button type="button" class="secondary" :disabled="serviceBusy" @click="openServiceConfirm('restart')">重启服务</button>
-        <button type="button" class="danger" :disabled="serviceBusy" @click="openServiceConfirm('stop')">停止服务</button>
+      <div class="bd-field">
+        <div class="bd-label"><b>新建机器人</b><span>填写地址后自动保存并连接</span></div>
+        <div class="bd-control wrap">
+          <input v-model.trim="newAddress" class="bd-input" placeholder="ts.example.com:9987">
+          <input v-model.trim="newNickname" class="bd-input narrow" placeholder="昵称">
+          <button type="button" class="bd-pill solid" :disabled="busy" @click="createBot"><b-icon icon="plus" size="is-small" />添加</button>
+        </div>
       </div>
-      <p v-if="serviceMessage" class="service-message">{{ serviceMessage }}</p>
-      <pre class="log-view" ref="logView">{{ logText || '暂无日志。' }}</pre>
     </section>
 
-    <div class="grid">
-      <section class="brand-card">
-        <h2>站点名称</h2>
-        <form @submit.prevent="saveBrand">
-          <label>显示名称<input v-model.trim="brandName"></label>
-          <button>保存名称</button>
-        </form>
-      </section>
+    <!-- ============ 网页账号 ============ -->
+    <section class="bd-card">
+      <div class="bd-card-head"><h2>网页账号</h2><span>{{ accounts.length }} 个</span></div>
+      <p class="bd-muted">账号与 TeamSpeak UID 无关。可为每个账号指定能控制的机器人，留空表示可控制全部。</p>
 
-      <section class="bots-card">
-        <div class="section-heading"><h2>音乐机器人</h2><span>{{ bots.length }} 个</span></div>
-        <p v-if="!bots.length" class="empty">还没有创建机器人。</p>
-        <article v-for="bot in bots" :key="bot.id">
-          <div class="bot-info"><b>{{ bot.name }}</b><small>{{ bot.address }}</small></div>
-          <span :class="['status', bot.status]">{{ statusText(bot.status) }}</span>
-          <button class="text-button" @click="openEdit(bot)">编辑</button>
-          <button class="text-button delete" @click="remove(bot)">删除</button>
-        </article>
-      </section>
+      <div v-for="account in accounts" :key="account.username" class="bd-account-item">
+        <span class="bd-avatar">{{ account.username.slice(0, 1).toUpperCase() }}</span>
+        <span class="bd-row-copy">
+          <b>{{ account.username }}</b>
+          <span>{{ account.role === 'admin' ? '管理员' : '普通用户' }}{{ account.enabled ? '' : ' · 已停用' }}</span>
+        </span>
+        <span class="bd-tag" :class="{ ok: account.enabled }">{{ account.enabled ? '已启用' : '已停用' }}</span>
+        <button type="button" class="bd-pill" @click="openBots(account)">
+          {{ botScopeText(account) }}
+        </button>
+        <button type="button" class="bd-pill" @click="account.username === me ? openOwnPassword() : openResetPassword(account)">改密</button>
+        <button type="button" class="bd-pill" :class="{ danger: account.enabled }" @click="toggle(account)">{{ account.enabled ? '停用' : '启用' }}</button>
+      </div>
 
-      <section class="new-bot-card">
-        <h2>新建机器人</h2>
-        <p>填写连接信息后，机器人会自动保存并尝试连接。</p>
-        <form @submit.prevent="createBot">
-          <label>服务器地址<input v-model.trim="newAddress" placeholder="例如：ts.example.com:9987"></label>
-          <label>机器人名称<input v-model.trim="newNickname" placeholder="波点音乐"></label>
-          <label>服务器密码（可选）<input v-model="newPassword" type="password"></label>
-          <button>创建并连接</button>
-        </form>
-      </section>
-
-      <section class="voice-card">
-        <div class="section-heading"><h2>语音控制</h2><span v-if="voiceLoading">读取中…</span></div>
-        <p>只有说出唤醒词后，机器人才会识别语音指令。</p>
-        <p v-if="!bots.length" class="empty">请先创建机器人。</p>
-        <template v-else>
-          <label>控制机器人
-            <select v-model="voiceBotId" :disabled="voiceLoading || voiceSaving" @change="loadVoiceSettings">
-              <option v-for="bot in bots" :key="bot.id" :value="bot.id">{{ bot.name }}</option>
-            </select>
-          </label>
-          <label class="checkbox-row">
-            <input v-model="voiceEnabled" type="checkbox" :disabled="voiceLoading || voiceSaving">
-            <span>启用语音控制</span>
-          </label>
-          <label>唤醒词
-            <input v-model.trim="voiceWakeWord" minlength="2" maxlength="20" placeholder="例如：音乐机器人">
-          </label>
-          <p class="voice-hint">例如：说“音乐机器人，暂停”“音乐机器人，继续”或“音乐机器人，下一首”。</p>
-          <p v-if="voiceError" class="inline-error">{{ voiceError }}</p>
-          <p v-if="voiceMessage" class="inline-success">{{ voiceMessage }}</p>
-          <button type="button" :disabled="voiceLoading || voiceSaving" @click="saveVoiceSettings">
-            {{ voiceSaving ? '保存中…' : '保存语音设置' }}
-          </button>
-        </template>
-      </section>
-
-      <section class="accounts-card">
-        <div class="section-heading">
-          <h2>网页账号管理</h2>
-          <span>{{ accounts.length }} 个账号</span>
+      <div class="bd-field">
+        <div class="bd-label"><b>新建账号</b><span>密码至少 8 位</span></div>
+        <div class="bd-control wrap">
+          <input v-model.trim="username" class="bd-input narrow" maxlength="32" placeholder="账号">
+          <input v-model="userPassword" class="bd-input narrow" type="password" autocomplete="new-password" placeholder="密码">
+          <select v-model="role" class="bd-input narrow">
+            <option value="user">普通用户</option>
+            <option value="admin">管理员</option>
+          </select>
+          <button type="button" class="bd-pill solid" :disabled="accountBusy" @click="createAccount">创建</button>
         </div>
-        <p class="account-intro">创建和管理可以登录网页控制台的账号。</p>
-        <p v-if="accountError" class="inline-error">{{ accountError }}</p>
-        <p v-if="accountSuccess" class="inline-success">{{ accountSuccess }}</p>
-        <form class="create-account" @submit.prevent="createAccount">
-          <label>账号<input v-model.trim="username" autocomplete="off" maxlength="32" placeholder="1-32 个字符"></label>
-          <label>密码<input v-model="userPassword" type="password" autocomplete="new-password" placeholder="至少 8 位"></label>
-          <label>角色
-            <select v-model="role">
-              <option value="user">普通用户</option>
-              <option value="admin">管理员</option>
-            </select>
+      </div>
+      <p v-if="accountError" class="bd-inline-error">{{ accountError }}</p>
+      <p v-if="accountSuccess" class="bd-inline-success">{{ accountSuccess }}</p>
+    </section>
+
+    <!-- ============ 访客模式 ============ -->
+    <section class="bd-card">
+      <div class="bd-card-head">
+        <h2>访客模式</h2>
+        <span>无需登录即可控制指定机器人</span>
+      </div>
+      <div class="bd-field">
+        <div class="bd-label"><b>允许访客访问</b><span>关闭后访客入口立即失效</span></div>
+        <div class="bd-control">
+          <button type="button" class="bd-switch" :class="{ on: guest.enabled }" role="switch" :aria-checked="guest.enabled" @click="guest.enabled = !guest.enabled" />
+        </div>
+      </div>
+      <div class="bd-field align-top">
+        <div class="bd-label"><b>访客可控制的机器人</b><span>至少选择一个才能开启</span></div>
+        <div class="bd-control wrap left">
+          <label v-for="bot in bots" :key="bot.id" class="bd-check">
+            <input type="checkbox" :value="bot.id" v-model="guest.bots">
+            <span>{{ bot.name }}</span>
           </label>
-          <button type="submit" :disabled="accountBusy">{{ accountBusy ? '创建中…' : '创建账号' }}</button>
-        </form>
-        <article v-for="account in accounts" :key="account.username" class="account-item">
-          <span class="account-avatar">{{ account.username.slice(0, 1).toUpperCase() }}</span>
-          <div class="account-info">
-            <b>{{ account.username }}</b>
-            <small>{{ account.role === 'admin' ? '管理员' : '普通用户' }}{{ account.enabled ? '' : ' · 已停用' }}</small>
-          </div>
-          <span :class="['account-status', { enabled: account.enabled }]">{{ account.enabled ? '已启用' : '已停用' }}</span>
-          <button type="button" class="text-button" @click="account.username === meUsername ? openOwnPassword() : openResetPassword(account)">
-            {{ account.username === meUsername ? '修改我的密码' : '修改密码' }}
-          </button>
-          <button type="button" :class="['text-button', { delete: account.enabled }]" @click="toggle(account)">{{ account.enabled ? '停用' : '启用' }}</button>
-        </article>
-        <div class="account-self"><span>当前账号：{{ meUsername || '管理员' }}</span><button type="button" class="text-button" @click="openOwnPassword">修改我的密码</button></div>
+          <span v-if="!bots.length" class="bd-muted">请先创建机器人。</span>
+        </div>
+      </div>
+      <div class="bd-field">
+        <div class="bd-label"></div>
+        <div class="bd-control">
+          <button type="button" class="bd-pill" :disabled="busy" @click="openGuestPassword">保存访客设置</button>
+        </div>
+      </div>
+      <p class="bd-muted note">访客只能播放、加入队列和切歌，不能清空队列、查看日志或修改任何设置。</p>
+    </section>
+
+    <!-- ============ 服务 ============ -->
+    <section class="bd-card">
+      <div class="bd-card-head"><h2>服务与日志</h2><span v-if="servicePid">PID {{ servicePid }}</span></div>
+      <div class="bd-field">
+        <div class="bd-label"><b>后台服务</b><span>重启或停止需要管理员密码</span></div>
+        <div class="bd-control">
+          <button type="button" class="bd-pill" :disabled="serviceBusy" @click="refreshLogs">刷新日志</button>
+          <button type="button" class="bd-pill" :disabled="serviceBusy" @click="openServiceConfirm('restart')">重启</button>
+          <button type="button" class="bd-pill danger" :disabled="serviceBusy" @click="openServiceConfirm('stop')">停止</button>
+        </div>
+      </div>
+      <p v-if="serviceMessage" class="bd-inline-success">{{ serviceMessage }}</p>
+      <pre class="bd-log" ref="logView">{{ logText || '暂无日志。' }}</pre>
+    </section>
+
+    <!-- ============ modals ============ -->
+    <div v-if="editing" class="bd-modal-mask" @click.self="closeEdit">
+      <section class="bd-modal" role="dialog" aria-modal="true">
+        <div class="bd-modal-head"><h2>编辑机器人</h2><button type="button" class="bd-icon-button" @click="closeEdit"><b-icon icon="close" /></button></div>
+        <p class="bd-muted">{{ editing.name }}</p>
+        <label class="bd-modal-label">服务器地址<input v-model.trim="editAddress" class="bd-input wide"></label>
+        <label class="bd-modal-label">机器人名称<input v-model.trim="editNickname" class="bd-input wide"></label>
+        <label class="bd-modal-label">服务器密码（留空表示不修改）<input v-model="editPassword" class="bd-input wide" type="password"></label>
+        <div class="bd-modal-actions">
+          <button type="button" class="bd-pill" @click="closeEdit">取消</button>
+          <button type="button" class="bd-pill solid" @click="saveEdit">保存并重连</button>
+        </div>
       </section>
     </div>
 
-    <div v-if="editing" class="modal-mask" @click.self="closeEdit">
-      <section class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-title">
-        <div class="modal-heading"><h2 id="edit-title">编辑机器人</h2><button type="button" class="close" title="关闭" @click="closeEdit">×</button></div>
-        <p>{{ editing.name }}</p>
-        <form @submit.prevent="saveEdit">
-          <label>服务器地址<input v-model.trim="editAddress"></label>
-          <label>机器人名称<input v-model.trim="editNickname"></label>
-          <label>服务器密码（留空则不设密码）<input v-model="editPassword" type="password"></label>
-          <div class="modal-actions"><button type="button" class="secondary" @click="closeEdit">取消</button><button type="submit">保存并重新连接</button></div>
-        </form>
+    <div v-if="botsModal" class="bd-modal-mask" @click.self="botsModal = null">
+      <section class="bd-modal" role="dialog" aria-modal="true">
+        <div class="bd-modal-head"><h2>机器人权限 · {{ botsModal.username }}</h2><button type="button" class="bd-icon-button" @click="botsModal = null"><b-icon icon="close" /></button></div>
+        <p class="bd-muted">勾选该账号可以控制的机器人。全部不勾选表示可控制全部机器人。</p>
+        <div class="bd-check-list">
+          <label v-for="bot in bots" :key="bot.id" class="bd-check">
+            <input type="checkbox" :value="bot.id" v-model="botsModal.bots">
+            <span>{{ bot.name }}</span>
+          </label>
+          <span v-if="!bots.length" class="bd-muted">还没有机器人。</span>
+        </div>
+        <div class="bd-modal-actions">
+          <button type="button" class="bd-pill" @click="botsModal = null">取消</button>
+          <button type="button" class="bd-pill solid" :disabled="busy" @click="saveAccountBots">保存</button>
+        </div>
       </section>
     </div>
 
-    <div v-if="passwordModal" class="modal-mask" @click.self="closePasswordModal">
-      <section class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="pwd-title">
-        <div class="modal-heading">
-          <h2 id="pwd-title">{{ passwordModal.mode === 'own' ? '修改我的密码' : ('修改密码 · ' + passwordModal.username) }}</h2>
-          <button type="button" class="close" title="关闭" @click="closePasswordModal">×</button>
+    <div v-if="passwordModal" class="bd-modal-mask" @click.self="closePasswordModal">
+      <section class="bd-modal" role="dialog" aria-modal="true">
+        <div class="bd-modal-head">
+          <h2>{{ passwordModal.mode === 'own' ? '修改我的密码' : ('修改密码 · ' + passwordModal.username) }}</h2>
+          <button type="button" class="bd-icon-button" @click="closePasswordModal"><b-icon icon="close" /></button>
         </div>
-        <form @submit.prevent="submitPassword">
-          <label v-if="passwordModal.mode === 'own'">当前密码<input v-model="passwordModal.currentPassword" type="password" autocomplete="current-password"></label>
-          <label>新密码<input v-model="passwordModal.newPassword" type="password" autocomplete="new-password" placeholder="至少 8 位"></label>
-          <label>确认新密码<input v-model="passwordModal.confirmPassword" type="password" autocomplete="new-password"></label>
-          <p v-if="passwordModal.error" class="inline-error">{{ passwordModal.error }}</p>
-          <div class="modal-actions">
-            <button type="button" class="secondary" @click="closePasswordModal">取消</button>
-            <button type="submit" :disabled="accountBusy">{{ accountBusy ? '提交中…' : '保存密码' }}</button>
-          </div>
-        </form>
+        <label v-if="passwordModal.mode === 'own'" class="bd-modal-label">当前密码<input v-model="passwordModal.currentPassword" class="bd-input wide" type="password" autocomplete="current-password"></label>
+        <label class="bd-modal-label">新密码<input v-model="passwordModal.newPassword" class="bd-input wide" type="password" autocomplete="new-password" placeholder="至少 8 位"></label>
+        <label class="bd-modal-label">确认新密码<input v-model="passwordModal.confirmPassword" class="bd-input wide" type="password" autocomplete="new-password"></label>
+        <p v-if="passwordModal.error" class="bd-inline-error">{{ passwordModal.error }}</p>
+        <div class="bd-modal-actions">
+          <button type="button" class="bd-pill" @click="closePasswordModal">取消</button>
+          <button type="button" class="bd-pill solid" :disabled="accountBusy" @click="submitPassword">保存密码</button>
+        </div>
       </section>
     </div>
 
-    <div v-if="serviceConfirm" class="modal-mask" @click.self="closeServiceConfirm">
-      <section class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="svc-title">
-        <div class="modal-heading">
-          <h2 id="svc-title">{{ serviceConfirm.action === 'restart' ? '重启服务' : '停止服务' }}</h2>
-          <button type="button" class="close" title="关闭" @click="closeServiceConfirm">×</button>
+    <div v-if="confirming" class="bd-modal-mask" @click.self="closeConfirm">
+      <section class="bd-modal" role="dialog" aria-modal="true">
+        <div class="bd-modal-head">
+          <h2>{{ confirming.kind === 'service' ? (confirming.action === 'restart' ? '重启服务' : '停止服务') : '保存访客设置' }}</h2>
+          <button type="button" class="bd-icon-button" @click="closeConfirm"><b-icon icon="close" /></button>
         </div>
-        <p class="confirm-hint">
-          <template v-if="serviceConfirm.action === 'restart'">确认后服务会自动重启，约 10 秒后刷新网页即可。</template>
-          <template v-else>停止后网页将无法访问，需要在服务器上重新运行启动脚本。</template>
+        <p class="bd-muted">
+          <template v-if="confirming.kind === 'service' && confirming.action === 'restart'">确认后服务会自动重启，约 10 秒后刷新网页即可。</template>
+          <template v-else-if="confirming.kind === 'service'">停止后网页将无法访问，需要在服务器上重新运行启动脚本。</template>
+          <template v-else>请输入管理员密码以确认修改访客权限。</template>
         </p>
-        <form @submit.prevent="submitServiceConfirm">
-          <label>
-            管理员密码（二次确认）
-            <input
-              ref="servicePasswordInput"
-              v-model="serviceConfirm.password"
-              type="password"
-              autocomplete="current-password"
-              :disabled="serviceBusy"
-              placeholder="输入当前管理员密码"
-            >
-          </label>
-          <p v-if="serviceConfirm.error" class="inline-error">{{ serviceConfirm.error }}</p>
-          <div class="modal-actions">
-            <button type="button" class="secondary" :disabled="serviceBusy" @click="closeServiceConfirm">取消</button>
-            <button
-              type="submit"
-              :class="serviceConfirm.action === 'stop' ? 'danger-solid' : ''"
-              :disabled="serviceBusy || !serviceConfirm.password"
-            >{{ serviceBusy ? '处理中…' : (serviceConfirm.action === 'restart' ? '确认重启' : '确认停止') }}</button>
-          </div>
-        </form>
+        <label class="bd-modal-label">管理员密码
+          <input ref="confirmInput" v-model="confirming.password" class="bd-input wide" type="password" autocomplete="current-password" :disabled="serviceBusy" placeholder="输入当前管理员密码" @keydown.enter.prevent="submitConfirm">
+        </label>
+        <p v-if="confirming.error" class="bd-inline-error">{{ confirming.error }}</p>
+        <div class="bd-modal-actions">
+          <button type="button" class="bd-pill" :disabled="serviceBusy" @click="closeConfirm">取消</button>
+          <button type="button" class="bd-pill solid" :class="{ danger: confirming.kind === 'service' && confirming.action === 'stop' }" :disabled="serviceBusy || !confirming.password" @click="submitConfirm">
+            {{ serviceBusy ? '处理中…' : '确认' }}
+          </button>
+        </div>
       </section>
     </div>
-  </main>
+  </div>
 </template>
 
 <script lang="ts">
 import Vue from "vue";
-import { consoleApi, ConsoleUser } from "../ConsoleApi";
+import { consoleApi, ConsoleUser, ConsoleAccount, ConsoleBot, GuestSettings } from "../ConsoleApi";
 import UpdatePanel from "../Components/UpdatePanel.vue";
 
-interface Bot { id: string; name: string; address: string; status: string; }
-interface Account { username: string; role: string; enabled: boolean; }
+interface ConfirmState {
+  kind: "service" | "guest";
+  action: "restart" | "stop" | "save";
+  password: string;
+  error: string;
+}
 
 export default Vue.extend({
   components: { UpdatePanel },
   data() {
     return {
-      brandName: "波点音乐", bots: [] as Bot[], accounts: [] as Account[], error: "",
-      newAddress: "", newNickname: "波点音乐", newPassword: "",
-      username: "", userPassword: "", role: "user",
-      accountBusy: false, accountError: "", accountSuccess: "",
-      meUsername: "",
-      passwordModal: null as null | {
-        mode: "own" | "admin";
-        username: string;
-        currentPassword: string;
-        newPassword: string;
-        confirmPassword: string;
-        error: string;
-      },
-      editing: null as Bot | null, editAddress: "", editNickname: "", editPassword: "",
-      updateOpen: false, currentVersion: "", latestVersion: "", hasUpdate: false,
-      servicePid: 0 as number | string, serviceBusy: false, serviceMessage: "",
-      serviceConfirm: null as null | { action: "restart" | "stop"; password: string; error: string },
-      voiceBotId: "", voiceEnabled: false, voiceWakeWord: "音乐机器人",
-      voiceLoading: false, voiceSaving: false, voiceError: "", voiceMessage: "",
-      logText: "", logTimer: 0 as any,
+      brandName: "波点音乐",
+      bots: [] as ConsoleBot[],
+      accounts: [] as ConsoleAccount[],
+      guest: { enabled: false, bots: [] } as GuestSettings,
+      error: "",
+      busy: false,
+      newAddress: "",
+      newNickname: "",
+      username: "",
+      userPassword: "",
+      role: "user",
+      accountBusy: false,
+      accountError: "",
+      accountSuccess: "",
+      me: "",
+      updateOpen: false,
+      currentVersion: "",
+      latestVersion: "",
+      hasUpdate: false,
+      servicePid: 0 as number | string,
+      serviceBusy: false,
+      serviceMessage: "",
+      logText: "",
+      logTimer: 0 as any,
+      editing: null as ConsoleBot | null,
+      editAddress: "",
+      editNickname: "",
+      editPassword: "",
+      botsModal: null as null | { username: string; bots: string[] },
+      passwordModal: null as null | { mode: "own" | "admin"; username: string; currentPassword: string; newPassword: string; confirmPassword: string; error: string },
+      confirming: null as ConfirmState | null,
     };
   },
   computed: {
@@ -237,9 +268,8 @@ export default Vue.extend({
     const user = await consoleApi<ConsoleUser>("me");
     if (user.role !== "admin") { this.$router.replace("/music"); return; }
     this.brandName = user.brandName;
-    this.meUsername = user.username;
+    this.me = user.username;
     await this.reload();
-    await this.loadVoiceSettings();
     await this.refreshUpdate();
     await this.refreshService();
     await this.refreshLogs();
@@ -249,58 +279,140 @@ export default Vue.extend({
     if (this.logTimer) clearInterval(this.logTimer);
   },
   methods: {
+    statusText(status: string) { return status === "connected" ? "已连接" : status === "connecting" ? "连接中" : "离线"; },
+    botScopeText(account: ConsoleAccount): string {
+      if (account.role === "admin") return "全部机器人";
+      if (!account.allowedBots || !account.allowedBots.length) return "全部机器人";
+      return account.allowedBots.length + " 个机器人";
+    },
     async reload() {
-      this.bots = (await consoleApi<{ bots: Bot[] }>("bots")).bots;
-      this.accounts = (await consoleApi<{ accounts: Account[] }>("accounts")).accounts;
-    },
-    async loadVoiceSettings() {
-      this.voiceError = "";
-      this.voiceMessage = "";
-      if (!this.bots.length) {
-        this.voiceBotId = "";
-        this.voiceEnabled = false;
-        this.voiceWakeWord = "音乐机器人";
-        return;
-      }
-      if (!this.voiceBotId || !this.bots.some(bot => bot.id === this.voiceBotId))
-        this.voiceBotId = this.bots[0].id;
-
-      this.voiceLoading = true;
-      this.voiceEnabled = false;
-      this.voiceWakeWord = "音乐机器人";
       try {
-        const settings = await consoleApi<{ enabled?: boolean; wakeWord?: string }>("bots/voice?botId=" + encodeURIComponent(this.voiceBotId));
-        this.voiceEnabled = !!settings.enabled;
-        this.voiceWakeWord = settings.wakeWord || "音乐机器人";
+        this.bots = (await consoleApi<{ bots: ConsoleBot[] }>("bots")).bots;
+        this.accounts = (await consoleApi<{ accounts: ConsoleAccount[] }>("accounts")).accounts;
+        const guest = await consoleApi<GuestSettings>("guest/settings");
+        this.guest = { enabled: !!guest.enabled, bots: guest.bots || [] };
       } catch (error) {
-        this.voiceError = error instanceof Error ? error.message : "读取语音设置失败。";
-      } finally {
-        this.voiceLoading = false;
+        this.error = error instanceof Error ? error.message : "读取管理数据失败。";
       }
     },
-    async saveVoiceSettings() {
-      if (!this.voiceBotId || this.voiceLoading || this.voiceSaving) return;
-      const wakeWord = (this.voiceWakeWord || "").trim();
-      this.voiceError = "";
-      this.voiceMessage = "";
-      if (wakeWord.length < 2 || wakeWord.length > 20) {
-        this.voiceError = "唤醒词长度必须是 2 到 20 个字符。";
+    async run(action: () => Promise<any>) {
+      this.error = "";
+      try { await action(); }
+      catch (error) { this.error = error instanceof Error ? error.message : "操作失败。"; }
+    },
+    saveBrand() {
+      return this.run(async () => {
+        await consoleApi("settings/brand", { brandName: this.brandName });
+        await this.reload();
+      });
+    },
+    createBot() {
+      if (this.busy) return;
+      this.busy = true;
+      return this.run(async () => {
+        await consoleApi("setup/bot", { address: this.newAddress, nickname: this.newNickname || "波点音乐", serverPassword: "" });
+        this.newAddress = "";
+        this.newNickname = "";
+        await this.reload();
+      }).finally(() => { this.busy = false; });
+    },
+    openEdit(bot: ConsoleBot) { this.editing = bot; this.editAddress = bot.address || ""; this.editNickname = bot.name; this.editPassword = ""; },
+    closeEdit() { this.editing = null; this.editPassword = ""; },
+    saveEdit() {
+      if (!this.editing) return;
+      return this.run(async () => {
+        await consoleApi("setup/bot", { id: this.editing!.id, address: this.editAddress, nickname: this.editNickname, serverPassword: this.editPassword });
+        this.closeEdit();
+        await this.reload();
+      });
+    },
+    remove(bot: ConsoleBot) {
+      return this.run(async () => { await consoleApi("bots/delete", { id: bot.id }); await this.reload(); });
+    },
+    async createAccount() {
+      this.accountError = "";
+      this.accountSuccess = "";
+      const name = (this.username || "").trim();
+      if (!name) { this.accountError = "请填写账号。"; return; }
+      if ((this.userPassword || "").length < 8) { this.accountError = "密码至少需要 8 个字符。"; return; }
+      this.accountBusy = true;
+      try {
+        await consoleApi("accounts", { username: name, password: this.userPassword, role: this.role });
+        this.accountSuccess = "账号「" + name + "」已创建。";
+        this.username = "";
+        this.userPassword = "";
+        this.role = "user";
+        await this.reload();
+      } catch (error) {
+        this.accountError = error instanceof Error ? error.message : "创建账号失败。";
+      } finally {
+        this.accountBusy = false;
+      }
+    },
+    toggle(account: ConsoleAccount) {
+      return this.run(async () => { await consoleApi("accounts/enabled", { username: account.username, enabled: !account.enabled }); await this.reload(); });
+    },
+    openBots(account: ConsoleAccount) {
+      this.botsModal = { username: account.username, bots: (account.allowedBots || []).slice() };
+    },
+    async saveAccountBots() {
+      if (!this.botsModal || this.busy) return;
+      this.busy = true;
+      try {
+        await consoleApi("accounts/bots", { username: this.botsModal.username, bots: this.botsModal.bots });
+        this.botsModal = null;
+        await this.reload();
+        this.accountSuccess = "已更新机器人权限。";
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : "保存机器人权限失败。";
+      } finally {
+        this.busy = false;
+      }
+    },
+    openGuestPassword() {
+      if (this.guest.enabled && !this.guest.bots.length) {
+        this.error = "开启访客模式前，请至少选择一个机器人。";
         return;
       }
-      this.voiceSaving = true;
+      this.error = "";
+      this.confirming = { kind: "guest", action: "save", password: "", error: "" };
+      this.$nextTick(() => {
+        const input = this.$refs.confirmInput as HTMLInputElement | undefined;
+        if (input) input.focus();
+      });
+    },
+    openOwnPassword() {
+      this.passwordModal = { mode: "own", username: this.me, currentPassword: "", newPassword: "", confirmPassword: "", error: "" };
+    },
+    openResetPassword(account: ConsoleAccount) {
+      this.passwordModal = { mode: "admin", username: account.username, currentPassword: "", newPassword: "", confirmPassword: "", error: "" };
+    },
+    closePasswordModal() { this.passwordModal = null; },
+    async submitPassword() {
+      if (!this.passwordModal) return;
+      const modal = this.passwordModal;
+      modal.error = "";
+      if (!modal.newPassword || modal.newPassword.length < 8) { modal.error = "新密码至少需要 8 个字符。"; return; }
+      if (modal.newPassword !== modal.confirmPassword) { modal.error = "两次输入的新密码不一致。"; return; }
+      this.accountBusy = true;
       try {
-        const settings = await consoleApi<{ enabled?: boolean; wakeWord?: string }>("bots/voice", {
-          id: this.voiceBotId,
-          enabled: this.voiceEnabled,
-          wakeWord,
-        });
-        this.voiceEnabled = !!settings.enabled;
-        this.voiceWakeWord = settings.wakeWord || wakeWord;
-        this.voiceMessage = "语音设置已保存。";
+        if (modal.mode === "own") {
+          await consoleApi("accounts/password", { currentPassword: modal.currentPassword, newPassword: modal.newPassword });
+          this.accountSuccess = "密码已修改，请重新登录。";
+          this.closePasswordModal();
+          setTimeout(async () => {
+            try { await consoleApi("logout", {}); } catch (_) { /* ignore */ }
+            this.$router.replace("/");
+          }, 800);
+        } else {
+          await consoleApi("accounts/password", { username: modal.username, newPassword: modal.newPassword });
+          this.accountSuccess = "已修改账号「" + modal.username + "」的密码。";
+          this.closePasswordModal();
+        }
       } catch (error) {
-        this.voiceError = error instanceof Error ? error.message : "保存语音设置失败。";
+        modal.error = error instanceof Error ? error.message : "修改密码失败。";
       } finally {
-        this.voiceSaving = false;
+        this.accountBusy = false;
       }
     },
     async refreshUpdate() {
@@ -313,10 +425,7 @@ export default Vue.extend({
         this.hasUpdate = !!check.hasUpdate;
       } catch (_) { /* ignore */ }
     },
-    onUpdateApplied() {
-      this.hasUpdate = false;
-      this.refreshUpdate();
-    },
+    onUpdateApplied() { this.hasUpdate = false; this.refreshUpdate(); },
     async refreshService() {
       try {
         const status = await consoleApi<{ pid?: number }>("service/status");
@@ -337,323 +446,165 @@ export default Vue.extend({
     },
     openServiceConfirm(action: "restart" | "stop") {
       this.serviceMessage = "";
-      this.error = "";
-      this.serviceConfirm = { action, password: "", error: "" };
+      this.confirming = { kind: "service", action, password: "", error: "" };
       this.$nextTick(() => {
-        const input = this.$refs.servicePasswordInput as HTMLInputElement | undefined;
+        const input = this.$refs.confirmInput as HTMLInputElement | undefined;
         if (input) input.focus();
       });
     },
-    closeServiceConfirm() {
+    closeConfirm() {
       if (this.serviceBusy) return;
-      this.serviceConfirm = null;
+      this.confirming = null;
     },
-    async submitServiceConfirm() {
-      if (!this.serviceConfirm || !this.serviceConfirm.password || this.serviceBusy) return;
-      const action = this.serviceConfirm.action;
-      const password = this.serviceConfirm.password;
+    async submitConfirm() {
+      if (!this.confirming || !this.confirming.password || this.serviceBusy) return;
+      const state = this.confirming;
       this.serviceBusy = true;
-      this.serviceConfirm.error = "";
-      this.serviceMessage = "";
+      state.error = "";
       try {
-        const path = action === "restart" ? "service/restart" : "service/stop";
-        const result = await consoleApi<{ message?: string }>(path, { password });
-        this.serviceMessage = result.message || (action === "restart" ? "服务即将重启，请稍候刷新。" : "服务即将停止。");
-        this.serviceConfirm = null;
-        if (action === "restart") setTimeout(() => { window.location.reload(); }, 12000);
+        if (state.kind === "guest") {
+          await consoleApi("guest/settings", { enabled: this.guest.enabled, bots: this.guest.bots, password: state.password });
+          this.confirming = null;
+          await this.reload();
+          this.accountSuccess = this.guest.enabled ? "访客模式已开启。" : "访客模式已关闭。";
+        } else {
+          const path = state.action === "restart" ? "service/restart" : "service/stop";
+          const result = await consoleApi<{ message?: string }>(path, { password: state.password });
+          this.serviceMessage = result.message || (state.action === "restart" ? "服务即将重启，请稍候刷新。" : "服务即将停止。");
+          this.confirming = null;
+          if (state.action === "restart") setTimeout(() => { window.location.reload(); }, 12000);
+        }
       } catch (error) {
-        const message = error instanceof Error ? error.message : (action === "restart" ? "重启失败。" : "停止失败。");
-        if (this.serviceConfirm) this.serviceConfirm.error = message;
-        this.error = message;
+        state.error = error instanceof Error ? error.message : "操作失败。";
       } finally {
         this.serviceBusy = false;
       }
     },
-    statusText(status: string) { return status === "connected" ? "已连接" : status === "connecting" ? "连接中" : "离线"; },
-    async run(action: () => Promise<any>) {
-      this.error = "";
-      try { await action(); }
-      catch (error) { this.error = error instanceof Error ? error.message : "操作失败。"; }
-    },
-    saveBrand() { return this.run(() => consoleApi("settings/brand", { brandName: this.brandName })); },
-    createBot() {
-      return this.run(async () => {
-        await consoleApi("setup/bot", { address: this.newAddress, nickname: this.newNickname, serverPassword: this.newPassword });
-        this.newAddress = ""; this.newNickname = "波点音乐"; this.newPassword = "";
-        await this.reload();
-        await this.loadVoiceSettings();
-      });
-    },
-    openEdit(bot: Bot) {
-      this.editing = bot;
-      this.editAddress = bot.address;
-      this.editNickname = bot.name;
-      this.editPassword = "";
-    },
-    closeEdit() { this.editing = null; this.editPassword = ""; },
-    saveEdit() {
-      if (!this.editing) return;
-      return this.run(async () => {
-        await consoleApi("setup/bot", { id: this.editing!.id, address: this.editAddress, nickname: this.editNickname, serverPassword: this.editPassword });
-        this.closeEdit();
-        await this.reload();
-        await this.loadVoiceSettings();
-      });
-    },
-    remove(bot: Bot) { return this.run(async () => { await consoleApi("bots/delete", { id: bot.id }); await this.reload(); await this.loadVoiceSettings(); }); },
-    async createAccount() {
-      this.accountError = "";
-      this.accountSuccess = "";
-      this.error = "";
-      const name = (this.username || "").trim();
-      const password = this.userPassword || "";
-      if (!name) { this.accountError = "请填写账号。"; return; }
-      if (password.length < 8) { this.accountError = "密码至少需要 8 个字符。"; return; }
-      this.accountBusy = true;
-      try {
-        await consoleApi("accounts", { username: name, password, role: this.role });
-        this.accountSuccess = "账号「" + name + "」已创建。";
-        this.username = "";
-        this.userPassword = "";
-        this.role = "user";
-        await this.reload();
-      } catch (error) {
-        this.accountError = error instanceof Error ? error.message : "创建账号失败。";
-        this.error = this.accountError;
-      } finally {
-        this.accountBusy = false;
-      }
-    },
-    openOwnPassword() {
-      this.passwordModal = {
-        mode: "own",
-        username: this.meUsername,
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-        error: "",
-      };
-    },
-    openResetPassword(account: Account) {
-      this.passwordModal = {
-        mode: "admin",
-        username: account.username,
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-        error: "",
-      };
-    },
-    closePasswordModal() { this.passwordModal = null; },
-    async submitPassword() {
-      if (!this.passwordModal) return;
-      const modal = this.passwordModal;
-      modal.error = "";
-      if (!modal.newPassword || modal.newPassword.length < 8) {
-        modal.error = "新密码至少需要 8 个字符。";
-        return;
-      }
-      if (modal.newPassword !== modal.confirmPassword) {
-        modal.error = "两次输入的新密码不一致。";
-        return;
-      }
-      this.accountBusy = true;
-      try {
-        if (modal.mode === "own") {
-          await consoleApi("accounts/password", {
-            currentPassword: modal.currentPassword,
-            newPassword: modal.newPassword,
-          });
-          this.accountSuccess = "密码已修改，请重新登录。";
-          this.closePasswordModal();
-          setTimeout(async () => {
-            try { await consoleApi("logout", {}); } catch (_) { /* ignore */ }
-            this.$router.replace("/");
-          }, 800);
-        } else {
-          await consoleApi("accounts/password", {
-            username: modal.username,
-            newPassword: modal.newPassword,
-          });
-          this.accountSuccess = "已修改账号「" + modal.username + "」的密码。";
-          this.closePasswordModal();
-        }
-      } catch (error) {
-        modal.error = error instanceof Error ? error.message : "修改密码失败。";
-      } finally {
-        this.accountBusy = false;
-      }
-    },
-    toggle(account: Account) { return this.run(async () => { await consoleApi("accounts/enabled", { username: account.username, enabled: !account.enabled }); await this.reload(); }); },
   },
 });
 </script>
 
 <style scoped lang="less">
-.admin { max-width: 1120px; margin: auto; padding: 36px 28px 48px; }
-.admin > header p { margin: 0 0 6px; color: var(--console-brand-dark); font-weight: 700; font-size: 13px; }
-.admin h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
-.update-card {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  margin-top: 20px; padding: 18px 20px; border: 1px solid var(--console-line);
-  border-radius: var(--console-radius); background: var(--console-surface); box-shadow: var(--console-shadow);
-}
-.update-card.highlight { border-color: #f0d48a; background: var(--console-warn-soft); }
-.update-copy h2 { margin: 0; font-size: 17px; }
-.update-copy p { margin: 6px 0 0; color: var(--console-muted); font-size: 13px; }
-.update-copy b { color: var(--console-ink); }
-.update-copy b.newer { color: var(--console-warn); }
-.update-card button {
-  height: 42px; padding: 0 16px; border: 0; border-radius: var(--console-radius-sm);
-  background: var(--console-brand); color: #fff; cursor: pointer; font: inherit; font-weight: 600; white-space: nowrap;
-}
-.update-card button.glow { background: #d4a017; box-shadow: 0 6px 16px rgba(212, 160, 23, 0.24); }
-.service-card {
-  margin-top: 16px; padding: 18px 20px; border: 1px solid var(--console-line);
-  border-radius: var(--console-radius); background: var(--console-surface); box-shadow: var(--console-shadow);
-}
-.service-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
-.service-actions button {
-  height: 40px; padding: 0 14px; border: 0; border-radius: var(--console-radius-sm); font: inherit; cursor: pointer;
-}
-.service-actions button:disabled { opacity: .6; cursor: wait; }
-.service-actions .secondary { background: #edf1f2; color: #4c5d69; }
-.service-actions .danger { background: var(--console-danger-soft); color: var(--console-danger); }
-.service-message { margin: 12px 0 0; color: #30a94c; font-size: 13px; }
-.log-view {
-  margin: 12px 0 0; max-height: 220px; overflow: auto; padding: 12px 14px;
-  border-radius: var(--console-radius-sm); background: #101820; color: #d7e2ea; font-size: 12px; line-height: 1.5;
-  white-space: pre-wrap; word-break: break-word;
-}
-.grid {
-  display: grid; grid-template-columns: minmax(300px, .9fr) minmax(0, 1.8fr);
-  grid-template-rows: auto auto auto; gap: 16px; margin-top: 16px; align-items: start;
-}
-.grid section {
-  min-width: 0; padding: 20px; border: 1px solid var(--console-line);
-  border-radius: var(--console-radius); background: var(--console-surface); box-shadow: var(--console-shadow);
-}
-.brand-card { grid-column: 1; grid-row: 1; }
-.new-bot-card { grid-column: 1; grid-row: 2; }
-.bots-card { grid-column: 2; grid-row: 1 / span 2; }
-.voice-card { grid-column: 1; grid-row: 3; }
-.accounts-card { grid-column: 1 / span 2; grid-row: 4; }
-.section-heading, .modal-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.section-heading h2, .grid h2, .edit-modal h2 { margin: 0; font-size: 17px; }
-.section-heading span { color: var(--console-muted); font-size: 13px; }
-.new-bot-card > p, .edit-modal > p, .empty { color: var(--console-muted); font-size: 13px; line-height: 1.55; }
-.voice-card > p { color: var(--console-muted); font-size: 13px; line-height: 1.55; }
-.voice-hint { margin: 12px 0 0; }
-label { display: block; margin-top: 12px; color: #44515e; font-size: 13px; font-weight: 600; }
-input, select {
-  width: 100%; height: 44px; margin-top: 6px; padding: 0 12px; border: 1px solid #d5e0e3;
-  border-radius: var(--console-radius-sm); background: #fff; color: var(--console-ink); font: inherit;
-}
-input:focus, select:focus {
-  outline: 0; border-color: var(--console-brand); box-shadow: 0 0 0 3px var(--console-brand-soft);
-}
-.checkbox-row { display: flex; align-items: center; gap: 8px; }
-.checkbox-row input { width: 18px; height: 18px; margin: 0; accent-color: var(--console-brand); }
-.voice-card > button { margin-top: 16px; }
-form > button { margin-top: 16px; }
-button {
-  height: 42px; padding: 0 14px; border: 0; border-radius: var(--console-radius-sm);
-  background: var(--console-brand); color: #fff; cursor: pointer; font: inherit; font-weight: 600;
-}
-article { display: flex; align-items: center; gap: 10px; padding: 14px 0; border-top: 1px solid #edf0f1; }
-.bots-card article:first-of-type, .accounts-card article:first-of-type { margin-top: 8px; }
-article div { flex: 1; min-width: 0; }
-article b, article small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-article small { margin-top: 4px; color: var(--console-muted); font-size: 12px; }
-.status {
-  padding: 4px 8px; border-radius: 999px; background: #f1f3f5; color: #788595; font-size: 12px; white-space: nowrap;
-}
-.status.connected { background: var(--console-brand-soft); color: #30a94c; }
-.status.connecting { background: var(--console-warn-soft); color: #9b6b10; }
-.text-button {
-  min-width: 52px; height: 36px; flex: 0 0 auto; white-space: nowrap;
-  background: var(--console-brand-soft); color: var(--console-brand-dark); font-weight: 600;
-}
-.text-button.delete { background: var(--console-danger-soft); color: var(--console-danger); }
-.create-account {
-  display: grid; grid-template-columns: 1fr 1fr 140px auto; align-items: end; gap: 10px; margin-top: 12px;
-}
-.create-account label { margin-top: 0; }
-.create-account button { margin-top: 0; min-width: 104px; height: 44px; }
-.create-account button:disabled { opacity: .65; cursor: wait; }
-.account-intro { margin: 6px 0 0; color: var(--console-muted); font-size: 13px; line-height: 1.55; }
-.account-item { gap: 12px; }
-.account-avatar { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: var(--console-brand-soft); color: var(--console-brand); font-size: 13px; font-weight: 800; }
-.account-info { min-width: 0; flex: 1; }
-.account-status { padding: 4px 9px; border-radius: 999px; background: var(--console-surface-2); color: var(--console-muted); font-size: 12px; white-space: nowrap; }
-.account-status.enabled { background: rgba(48, 209, 88, .14); color: #30a94c; }
-.account-self { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--console-line); color: var(--console-muted); font-size: 13px; }
-.inline-error { margin: 10px 0 0; color: var(--console-danger); font-size: 13px; }
-.inline-success { margin: 10px 0 0; color: #30a94c; font-size: 13px; }
-.error { margin-top: 16px; color: var(--console-danger); }
-.modal-mask {
-  position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px;
-  background: rgba(25, 37, 48, 0.4);
-}
-.edit-modal {
-  width: 100%; max-width: 480px; padding: 24px; border-radius: var(--console-radius-lg);
-  background: #fff; box-shadow: var(--console-shadow-md);
-}
-.close {
-  width: 36px; height: 36px; padding: 0; border-radius: 50%; background: #edf1f2; color: #53616e;
-  font-size: 22px; line-height: 1; font-weight: 400;
-}
-.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-.modal-actions button { margin: 0; min-width: 88px; }
-.secondary { background: #edf1f2; color: #4c5d69; }
-.confirm-hint { margin: 0 0 12px; color: var(--console-muted); font-size: 13px; line-height: 1.55; }
-.danger-solid { background: var(--console-danger); color: #fff; }
+.bd-admin { max-width: 880px; padding: 6px 26px 28px; }
+.bd-admin-head h1 { margin: 0; color: var(--console-ink); font-size: 30px; font-weight: 800; letter-spacing: -.025em; }
+.bd-admin-head p { margin: 4px 0 0; color: var(--console-muted); font-size: 13px; }
 
-@media (max-width: 1000px) {
-  .grid { grid-template-columns: 1fr; grid-template-rows: none; }
-  .brand-card, .new-bot-card, .bots-card, .voice-card, .accounts-card { grid-column: auto; grid-row: auto; }
-  .create-account { grid-template-columns: 1fr; }
-  .create-account button { width: 100%; }
-  .admin { padding: 24px 16px 40px; }
+.bd-card {
+  margin-top: 16px; padding: 4px 0;
+  border: 1px solid var(--console-line); border-radius: var(--console-radius);
+  background: var(--console-surface);
 }
-@media (max-width: 600px) {
-  .admin h1 { font-size: 24px; }
-  .update-card, .service-card, .grid section { padding: 16px; }
-  .update-card { align-items: stretch; flex-direction: column; }
-  .update-card button, .service-actions button { width: 100%; height: 44px; }
-  .log-view { max-height: 160px; }
-  .bots-card article, .accounts-card article { align-items: flex-start; flex-wrap: wrap; }
-  .status { margin-left: auto; }
-  .section-heading { flex-wrap: wrap; }
-  .section-heading .text-button { width: 100%; }
-  .account-item { align-items: center !important; }
-  .account-status { margin-left: 0; }
-  .account-item .text-button { width: auto; min-width: 0; padding: 0 9px; }
-  .account-self { align-items: stretch; flex-direction: column; }
-  .account-self .text-button { width: 100%; }
+.bd-card > h2, .bd-card > .bd-card-head {
+  margin: 0; padding: 15px 18px 9px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 16px !important; font-weight: 750; letter-spacing: -.015em; line-height: 1.3;
+}
+.bd-card-head span { color: var(--console-muted); font-size: 12px; font-weight: 500; }
+
+.bd-field {
+  display: flex; align-items: center; gap: 18px;
+  padding: 11px 18px; border-top: 1px solid var(--console-line);
+}
+.bd-field.align-top { align-items: flex-start; }
+.bd-label { flex: 0 0 190px; min-width: 0; }
+.bd-label b { display: block; font-size: 13px; font-weight: 600; }
+.bd-label span { display: block; margin-top: 2px; color: var(--console-muted); font-size: 11.5px; line-height: 1.45; }
+.bd-control { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.bd-control.wrap { flex-wrap: wrap; }
+.bd-control.left { justify-content: flex-start; }
+
+.bd-input {
+  height: 30px; padding: 0 10px; border-radius: 7px;
+  border: 1px solid var(--console-line-strong);
+  background: var(--console-bg); color: var(--console-ink);
+  font-size: 12.5px; outline: none;
+}
+.bd-input:focus { border-color: var(--console-brand); box-shadow: 0 0 0 3px var(--console-brand-soft); }
+.bd-input.narrow { width: 130px; }
+.bd-input.wide { width: 100%; height: 36px; margin-top: 6px; }
+select.text-input { padding-right: 24px; cursor: pointer; }
+
+.bd-row-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-top: 1px solid var(--console-line); }
+.bd-row-icon {
+  width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center;
+  border-radius: 8px; background: var(--console-brand-soft); color: var(--console-brand);
+}
+.bd-row-copy { flex: 1; min-width: 0; }
+.bd-row-copy b, .bd-row-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bd-row-copy b { color: var(--console-ink); font-size: 13px; font-weight: 600; }
+.bd-row-copy span { margin-top: 2px; color: var(--console-muted); font-size: 11.5px; }
+
+.bd-account-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-top: 1px solid var(--console-line); }
+.bd-avatar {
+  width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center;
+  border-radius: 50%; background: linear-gradient(140deg, #7d7aff, #4f46e5);
+  color: #fff; font-size: 12px; font-weight: 700;
 }
 
-/* Shared black / white / red admin surface. */
-.admin { max-width: 1120px; padding: 48px 40px 60px; }
-.admin > header p { color: var(--console-brand); }
-.admin h1 { color: var(--console-ink); font-size: 34px; letter-spacing: -.025em; }
-.update-card, .service-card, .grid section { border-color: var(--console-line); background: var(--console-surface); box-shadow: var(--console-shadow-sm); }
-.update-card { margin-top: 30px; border-radius: 14px; }
-.update-card.highlight { border-color: rgba(235, 173, 0, .35); background: var(--console-warn-soft); }
-.service-card, .grid section { border-radius: 14px; }
-.service-actions .secondary, .secondary { background: var(--console-surface-2); color: var(--console-muted); }
-.log-view { background: #111113; color: #d7d7dc; border-radius: 10px; }
-.grid { gap: 14px; margin-top: 14px; }
-label { color: var(--console-ink); }
-input, select { border-color: var(--console-line-strong); border-radius: 9px; background: var(--console-surface-2); color: var(--console-ink); }
-input:focus, select:focus { border-color: var(--console-brand); box-shadow: 0 0 0 3px var(--console-brand-soft); }
-article { border-top-color: var(--console-line); }
-.status { background: var(--console-surface-2); color: var(--console-muted); }
-.status.connected { background: rgba(48, 209, 88, .14); color: #30a94c; }
-.status.connecting { background: var(--console-warn-soft); color: var(--console-warn); }
-.modal-mask { background: rgba(0, 0, 0, .52); }
-.edit-modal { border: 1px solid var(--console-line); border-radius: 18px; background: var(--console-surface); color: var(--console-ink); }
-.close { background: var(--console-surface-2); color: var(--console-muted); }
-@media (max-width: 1000px) { .admin { padding: 36px 20px 48px; } }
-@media (max-width: 600px) { .admin { padding: 30px 16px 42px; } .admin h1 { font-size: 28px; } }
+.bd-tag {
+  height: 22px; padding: 0 9px; display: inline-flex; align-items: center;
+  border-radius: 999px; background: var(--console-fill); color: var(--console-muted);
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.bd-tag.connected, .bd-tag.ok { background: var(--console-ok-soft); color: var(--console-ok); }
+.bd-tag.connecting { background: var(--console-warn-soft); color: var(--console-warn); }
+.bd-tag.warn { background: var(--console-warn-soft); color: var(--console-warn); }
+
+.bd-switch {
+  position: relative; width: 44px; height: 26px; flex: 0 0 auto;
+  border: 0; border-radius: 999px; background: var(--console-fill-2);
+  cursor: pointer; transition: background .18s ease;
+}
+.bd-switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+  transition: transform .18s ease;
+}
+.bd-switch.on { background: var(--console-ok); }
+.bd-switch.on::after { transform: translateX(18px); }
+.bd-switch:disabled { opacity: .5; cursor: not-allowed; }
+
+.bd-check { display: inline-flex; align-items: center; gap: 7px; margin: 0 14px 6px 0; font-size: 12.5px; cursor: pointer; }
+.bd-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--console-brand); cursor: pointer; }
+.bd-check-list { display: flex; flex-wrap: wrap; gap: 4px 0; margin-top: 10px; padding: 10px 12px; border-radius: 9px; background: var(--console-surface-2); }
+
+.bd-muted { margin: 0; padding: 4px 18px 10px; color: var(--console-muted); font-size: 12.5px; line-height: 1.6; }
+.bd-muted.note { padding-top: 0; padding-bottom: 14px; font-size: 11.5px; }
+
+.bd-log {
+  margin: 0; max-height: 220px; overflow: auto;
+  padding: 12px 16px; border-radius: 0 0 var(--console-radius) var(--console-radius);
+  background: #0f0f11; color: #c8c8cc;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+}
+
+.bd-modal-mask { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, .52); }
+.bd-modal {
+  width: 100%; max-width: 460px; padding: 20px 22px 18px;
+  border: 1px solid var(--console-line); border-radius: 18px;
+  background: var(--console-surface); color: var(--console-ink);
+  box-shadow: var(--console-shadow-md);
+}
+.bd-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.bd-modal-head h2 { margin: 0; color: var(--console-ink); font-size: 16px; font-weight: 750; }
+.bd-modal-head .icon-button { margin-left: auto; }
+.bd-modal-label { display: block; margin-top: 12px; color: var(--console-ink); font-size: 12.5px; font-weight: 600; }
+.bd-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.bd-modal-actions .pill { height: 32px; padding: 0 14px; }
+.pill.danger { color: var(--console-brand); }
+.pill.danger:hover:not(:disabled) { background: var(--console-danger-soft); }
+
+@media (max-width: 1023px) {
+  .bd-admin { padding: 4px 16px 24px; }
+  .bd-admin-head h1 { font-size: 25px; }
+  .bd-field { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .bd-label { flex: none; }
+  .bd-control { width: 100%; justify-content: flex-start; }
+  .bd-row-item, .bd-account-item { flex-wrap: wrap; gap: 8px; }
+  .bd-row-copy { flex: 1 1 140px; }
+  .bd-input.narrow { width: 100%; }
+  .bd-control.wrap .bd-input.narrow { flex: 1 1 120px; }
+}
 </style>

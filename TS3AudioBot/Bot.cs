@@ -87,7 +87,6 @@ namespace TS3AudioBot
 			Injector.AddModule(Injector);
 			Injector.AddModule(config.Playlists);
 			Injector.AddModule(config.History);
-			Injector.AddModule(config.Voice);
 			Injector.AddModule(Id);
 			builder.RequestModule<PlaylistIO>();
 			builder.RequestModule<PlaylistManager>();
@@ -107,7 +106,6 @@ namespace TS3AudioBot
 				builder.RequestModule<HistoryManager>();
 			}
 			builder.RequestModule<PlayManager>();
-			builder.RequestModule<VoiceControlService>();
 
 			if (!builder.Build())
 			{
@@ -205,7 +203,6 @@ namespace TS3AudioBot
 			DisableIdleTickWorker();
 
 			Injector.GetModule<PluginManager>()?.StopPlugins(this);
-			Injector.GetModule<VoiceControlService>()?.Dispose();
 			Injector.GetModule<PlayManager>()?.Stop();
 			Injector.GetModule<Player>()?.Dispose();
 			var tsClient = Injector.GetModule<Ts3Client>();

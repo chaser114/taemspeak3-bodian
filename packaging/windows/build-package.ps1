@@ -1,4 +1,4 @@
-﻿param(
+param(
 	[string] $OutputDirectory = "..\发布版\TS3AudioBot-KuwoPlugin-web-console-windows-x64-fixed",
 	[string] $FfmpegPath = "..\搭建包\TS3AudioBot-KuwoPlugin-windows-x64\ffmpeg.exe"
 )
@@ -31,7 +31,6 @@ if ($LASTEXITCODE -ne 0) { throw "Kuwo plugin build failed." }
 
 & $dotnet publish (Join-Path $projectRoot "TS3AudioBot\TS3AudioBot.csproj") -c Release -r win-x64 -p:SkipGitVersion=true --self-contained true --no-restore -o $outputPath
 if ($LASTEXITCODE -ne 0) { throw "Windows publish failed." }
-& (Join-Path $projectRoot "packaging\common\fetch-voice-model.ps1") -OutputRoot $outputPath
 
 $pluginOutput = Join-Path $projectRoot "KuwoMusicPlugin\bin\Release\net6.0\KuwoMusicPlugin.dll"
 if (-not (Test-Path -LiteralPath $pluginOutput -PathType Leaf)) { throw "Kuwo plugin build output was not found: $pluginOutput" }
