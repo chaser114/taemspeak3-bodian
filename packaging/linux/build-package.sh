@@ -44,7 +44,7 @@ printf '%s\n' "Building web console..."
 
 test -s "$repo/WebInterface/dist/index.html"
 test -s "$repo/WebInterface/dist/bundle.js"
-grep -Fq "bot-select-icon" "$repo/WebInterface/dist/bundle.js"
+grep -Fq "bd-shell" "$repo/WebInterface/dist/bundle.js"
 
 printf '%s\n' "Restoring Linux runtime assets..."
 "$dotnet_cmd" restore "$repo/TS3AudioBot/TS3AudioBot.csproj" --runtime linux-x64 -p:RuntimeIdentifier=linux-x64 -p:SkipGitVersion=true
@@ -86,7 +86,7 @@ test -s "$output_dir/plugins/KuwoMusicPlugin.dll"
 test -s "$output_dir/WebInterface/index.html"
 test -s "$output_dir/WebInterface/bundle.js"
 test -s "$output_dir/packaging/common/update-in-place.sh"
-grep -Fq "bot-select-icon" "$output_dir/WebInterface/bundle.js"
+grep -Fq "bd-shell" "$output_dir/WebInterface/bundle.js"
 
 # Local builds get a timestamp version; CI overwrites with build-N.
 if [ ! -f "$output_dir/VERSION" ]; then

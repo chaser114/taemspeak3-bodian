@@ -55,7 +55,7 @@ jobs:
           npm run build
           test -s dist/index.html
           test -s dist/bundle.js
-          grep -Fq "bot-select-icon" dist/bundle.js
+          grep -Fq "bd-shell" dist/bundle.js
 
       - name: Validate Docker Compose configuration
         run: docker compose config
