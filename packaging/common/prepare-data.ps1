@@ -63,17 +63,51 @@ enabled = true
 }
 
 if (Test-Path -LiteralPath $configPath -PathType Leaf) {
-	$content = Get-Content -LiteralPath $configPath -Raw
-	if ($content -match '(?ms)(\[plugins\][^\[]*?)^\s*path\s*=\s*"plugins"\s*$') {
-		$updated = [regex]::Replace(
-			$content,
-			'(?ms)(\[plugins\][^\[]*?)^\s*path\s*=\s*"plugins"\s*$',
-			'$1path = "../plugins"',
-			1
-		)
-		if ($updated -ne $content) {
-			Set-Content -LiteralPath $configPath -Value $updated -Encoding UTF8
+	$lines = @(Get-Content -LiteralPath $configPath)
+	$desired = 'path = "../plugins"'
+
+	# The program resolves [plugins] path relative to the working directory, which is
+	# data/ for the packaged launcher. Any value pointing at the data folder (the
+	# built-in default is "plugins") silently disables every plugin, so normalise the
+	# value to the plugins folder that ships next to data/.
+	$sectionStart = -1
+	for ($i = 0; $i -lt $lines.Count; $i++) {
+		if ($lines[$i].Trim() -eq '[plugins]') { $sectionStart = $i; break }
+	}
+
+	$changed = $false
+	if ($sectionStart -ge 0) {
+		# Find the end of the section (the next [header] or end of file).
+		$sectionEnd = $lines.Count
+		for ($i = $sectionStart + 1; $i -lt $lines.Count; $i++) {
+			if ($lines[$i] -match '^\s*\[') { $sectionEnd = $i; break }
 		}
+
+		$pathIndex = -1
+		for ($i = $sectionStart + 1; $i -lt $sectionEnd; $i++) {
+			if ($lines[$i] -match '^\s*path\s*=') { $pathIndex = $i; break }
+		}
+
+		if ($pathIndex -ge 0) {
+			if ($lines[$pathIndex] -ne $desired) {
+				$lines[$pathIndex] = $desired
+				$changed = $true
+			}
+		}
+		else {
+			# Section exists without a path key: insert one right after the header.
+			$lines = @($lines[0..$sectionStart]) + @($desired) + @($lines[($sectionStart + 1)..($lines.Count - 1)])
+			$changed = $true
+		}
+	}
+	else {
+		$lines = @($lines) + @('', '[plugins]', $desired)
+		$changed = $true
+	}
+
+	if ($changed) {
+		Set-Content -LiteralPath $configPath -Value $lines -Encoding UTF8
+		Write-Host "Normalised [plugins] path to ../plugins in $configPath"
 	}
 }
 

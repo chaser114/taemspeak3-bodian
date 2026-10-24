@@ -8,7 +8,8 @@ if not exist "%~dp0TS3AudioBot.exe" (
 )
 
 if exist "%~dp0packaging\common\prepare-data.ps1" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0packaging\common\prepare-data.ps1" -Root "%~dp0" >nul
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0packaging\common\prepare-data.ps1" -Root "%~dp0"
+  if errorlevel 1 echo Warning: prepare-data.ps1 failed; the bot will fall back to the bundled plugins folder.
 ) else (
   if not exist "%~dp0data" mkdir "%~dp0data"
   if not exist "%~dp0data\bots" mkdir "%~dp0data\bots"

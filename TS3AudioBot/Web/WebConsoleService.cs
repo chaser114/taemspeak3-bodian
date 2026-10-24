@@ -16,6 +16,8 @@ namespace TS3AudioBot.Web
 	/// <summary>Cookie-authenticated web console adapter. It is deliberately the only owner that crosses into a bot scheduler.</summary>
 	public sealed class WebConsoleService
 	{
+		private static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
+
 		private readonly BotManager botManager;
 		private readonly ConfRoot rootConfig;
 		private readonly WebAccountService webAccounts;
@@ -59,11 +61,22 @@ namespace TS3AudioBot.Web
 			});
 		}
 
-		public Task<IList<AudioResource>> Search(string query, string? botId = null)
+		public async Task<IList<AudioResource>> Search(string query, string? botId = null)
 		{
 			if (string.IsNullOrWhiteSpace(query)) throw new ArgumentException("请输入歌曲、歌手或专辑。");
 			var bot = RequireBot(botId);
-			return bot.Scheduler.InvokeAsync(() => bot.Injector.GetModuleOrThrow<ResolveContext>().Search("kuwo", query.Trim()));
+			try
+			{
+				return await bot.Scheduler.InvokeAsync(() => bot.Injector.GetModuleOrThrow<ResolveContext>().Search("kuwo", query.Trim()));
+			}
+			catch (AudioBotException ex) when (ex.Message.IndexOf("kuwo", StringComparison.OrdinalIgnoreCase) >= 0)
+			{
+				// The music plugin is not registered, which almost always means the plugins
+				// folder could not be found. Surface the real cause instead of a generic
+				// "search failed" so the problem is diagnosable from the web console.
+				Log.Warn(ex, "Music plugin is not available.");
+				throw new ArgumentException("音乐插件未加载：找不到 KuwoMusicPlugin。请确认程序目录下的 plugins 文件夹里有 KuwoMusicPlugin.dll。");
+			}
 		}
 
 		public Task Play(string username, AudioResource resource, string? botId = null)

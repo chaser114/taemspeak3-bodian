@@ -59,12 +59,97 @@ namespace TS3AudioBot.Plugins
 			CheckLocalPlugins(bot);
 		}
 
+		private static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
+
+		/// <summary>
+		/// Resolves the plugin directory.
+		/// The configured path is relative to the process working directory, which is
+		/// "data/" when the bot is started by the packaged launcher. A legacy config value
+		/// of "plugins" therefore points at "data/plugins" and silently disables every
+		/// plugin. When that happens we fall back to the "plugins" folder next to the
+		/// program and next to the data folder so a one-click package always works.
+		/// </summary>
+		private DirectoryInfo? ResolvePluginDirectory()
+		{
+			var configured = config.Path.Value;
+			var direct = new DirectoryInfo(configured);
+			if (direct.Exists && ContainsPluginFiles(direct))
+				return direct;
+
+			foreach (var candidate in GetPluginDirectoryFallbacks(configured))
+			{
+				if (candidate.Exists && ContainsPluginFiles(candidate))
+				{
+					Log.Warn("Plugin path \"{0}\" resolved to \"{1}\". Using \"{2}\" instead. "
+						+ "Set [plugins] path = \"../plugins\" in the config to silence this warning.",
+						configured, direct.FullName, candidate.FullName);
+					return candidate;
+				}
+			}
+
+			if (!direct.Exists)
+				Log.Warn("Plugin directory \"{0}\" does not exist. No plugins were loaded.", direct.FullName);
+			else
+				Log.Warn("Plugin directory \"{0}\" contains no plugin files. No plugins were loaded.", direct.FullName);
+			return null;
+		}
+
+		private static IEnumerable<DirectoryInfo> GetPluginDirectoryFallbacks(string configured)
+		{
+			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			var roots = new List<string>();
+			try { roots.Add(AppDomain.CurrentDomain.BaseDirectory); }
+			catch (Exception ex) { Log.Debug(ex, "Could not read the base directory."); }
+			try { roots.Add(Directory.GetCurrentDirectory()); }
+			catch (Exception ex) { Log.Debug(ex, "Could not read the current directory."); }
+
+			foreach (var root in roots)
+			{
+				if (string.IsNullOrWhiteSpace(root))
+					continue;
+
+				// "plugins" next to the executable, e.g. <package>/plugins.
+				foreach (var candidate in new[]
+				{
+					Path.Combine(root, "plugins"),
+					Path.Combine(root, "..", "plugins"),
+					Path.Combine(root, configured),
+					Path.Combine(root, "..", configured),
+				})
+				{
+					string full;
+					try { full = Path.GetFullPath(candidate); }
+					catch (Exception ex) { Log.Debug(ex, "Invalid plugin path candidate."); continue; }
+					if (!seen.Add(full))
+						continue;
+					yield return new DirectoryInfo(full);
+				}
+			}
+		}
+
+		private static bool ContainsPluginFiles(DirectoryInfo dir)
+		{
+			try
+			{
+				foreach (var file in dir.EnumerateFiles())
+				{
+					if (!IsIgnored(file))
+						return true;
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Debug(ex, "Could not enumerate the plugin directory \"{0}\".", dir.FullName);
+			}
+			return false;
+		}
+
 		/// <summary>Updates the plugin dictionary with new and changed plugins.</summary>
 		/// <param name="bot">A bot instance when the plugin is a bot local plugin.</param>
 		private void CheckLocalPlugins(Bot? bot)
 		{
-			var dir = new DirectoryInfo(config.Path);
-			if (!dir.Exists)
+			var dir = ResolvePluginDirectory();
+			if (dir is null)
 				return;
 
 			foreach (var file in dir.EnumerateFiles())
